@@ -1,14 +1,16 @@
 menu "YKB Firmware"
 
     choice YKB_LEFT_RIGHT
-        bool "Compile YKB firmware for left or right keyboard"
+        bool "Left/Right"
         default YKB_LEFT
+        help
+          "Compile YKB firmware for left or right keyboard"
 
         config YKB_LEFT
-            bool "LEFT"
+            bool "Left"
 
         config YKB_RIGHT
-            bool "RIGHT"
+            bool "Right"
     endchoice
 
     rsource "Kconfig.ykb.usb"

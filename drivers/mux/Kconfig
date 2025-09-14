@@ -5,10 +5,10 @@ menuconfig MUX
 
 if MUX
 
-module = MUX
-module-str = mux
-source "subsys/logging/Kconfig.template.log_config"
+    module = MUX
+    module-str = mux
+    source "subsys/logging/Kconfig.template.log_config"
 
-rsource "Kconfig.gpio"
+    rsource "Kconfig.gpio"
 
 endif # MUX

@@ -1,5 +1,10 @@
-menu "USB"
+menuconfig YKB_USB_ENABLED
+    bool "USB support"
+    default y
+    help
+      This option enables the support for USB on YarmanKeyboards keyboard
 
+if YKB_USB_ENABLED
     config YKB_USBD_MANUFACTURER
         string "USB device manufacturer string"
         help
@@ -43,4 +48,4 @@ menu "USB"
         help
             Set bcdUSB value to 0201 and use default USB 2.0 Extension Descriptor.
 
-endmenu
+endif # YKB_USB

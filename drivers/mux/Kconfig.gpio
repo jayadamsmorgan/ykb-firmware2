@@ -8,11 +8,11 @@ config MUX_GPIO
 
 if MUX_GPIO
 
-config MUX_GPIO_MAX_SEL_CNT
-    int "Maximum amount of select lines"
-    default 8
-    help
-      Maximum amount of select lines (pins) driver supports.
+    config MUX_GPIO_MAX_SEL_CNT
+        int "Maximum amount of select lines"
+        default 8
+        help
+          Maximum amount of select lines (pins) driver supports.
 
 endif # MUX_GPIO
 

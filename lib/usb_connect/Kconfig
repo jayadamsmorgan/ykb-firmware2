@@ -1,0 +1,7 @@
+config USB_CONNECT
+    bool "Support for USB HID connection"
+    default y
+    depends on YKB_USB_ENABLED
+    help
+      This option enables the 'USBConnect' library
+
