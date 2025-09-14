@@ -1,9 +1,23 @@
 menuconfig KSCAN
 	bool "KScan drivers"
+    default y
 	help
 	  This option enables the KScan custom driver class.
 
 if KSCAN
+
+choice KSCAN_BACKEND
+    bool "KScan driver backend"
+    default KSCAN_MUXES
+
+    config KSCAN_MUXES
+        bool "KScan MUXes driver backend"
+        depends on DT_HAS_KSCAN_MUXES_ENABLED
+        select ADC
+        help
+          Enable this option to use the logic of multiplexors to poll keyboard keys.
+
+endchoice
 
 module = KSCAN
 module-str = kscan

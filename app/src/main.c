@@ -6,9 +6,12 @@
 #include <drivers/kscan.h>
 #include <drivers/mux.h>
 
+#include <zephyr/usb/class/usbd_hid.h>
+#include <zephyr/usb/usbd.h>
+
 #include <app_version.h>
 
-LOG_MODULE_REGISTER(main, CONFIG_APP_LOG_LEVEL);
+LOG_MODULE_REGISTER(main, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
 
 #define BLINK_PERIOD_MS_STEP 100U
 #define BLINK_PERIOD_MS_MAX 1000U
