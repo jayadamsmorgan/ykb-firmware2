@@ -1,0 +1,17 @@
+config KSCAN_MUXES
+	bool "KScan MUXes driver"
+	default y
+	depends on DT_HAS_KSCAN_MUXES_ENABLED
+	select ADC
+	help
+	  Enable this option to use the logic of multiplexors to poll keyboard keys.
+
+if KSCAN_MUXES
+
+config KSCAN_MUXES_MAX_MUX_CNT
+    int "Maximum amount of multiplexors driver supports"
+    default 3
+    help
+      Maximum amount of multiplexors driver supports.
+
+endif # KSCAN_MUXES

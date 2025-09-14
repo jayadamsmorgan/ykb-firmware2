@@ -1,0 +1,35 @@
+description: |
+  A generic binding for a GPIO-controlled blinking LED. Note that this binding
+  has no vendor prefix, as it does not target a specific device or vendor.
+
+  Example definition in devicetree:
+
+    blink-gpio-led {
+        compatible = "blink-gpio-led";
+        led-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+        blink-period-ms = <1000>;
+    };
+
+compatible: "kscan-muxes"
+
+include: base.yaml
+
+properties:
+  muxes:
+    type: phandle-array
+    specifier-space: mux
+    required: true
+  mux-names:
+    type: string-array
+    required: false
+    description: Optional names for the mux channels (debug only)
+  io-channels:
+    type: phandle-array
+    required: true
+    description: >
+      List of ADC channels. Should be the same amount and in same order
+      as corresponding multiplexors.
+  io-channel-names:
+    type: string-array
+    required: false
+    description: Optional names for the io-channels (debug only)

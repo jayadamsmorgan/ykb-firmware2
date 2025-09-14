@@ -1,0 +1,18 @@
+config MUX_GPIO
+	bool "GPIO-controlled generic multiplexer driver"
+	default y
+	depends on DT_HAS_MUX_GPIO_ENABLED
+	select GPIO
+	help
+	  Enable this option to use the GPIO-controlled multiplexer driver.
+
+if MUX_GPIO
+
+config MUX_GPIO_MAX_SEL_CNT
+    int "Maximum amount of select lines"
+    default 8
+    help
+      Maximum amount of select lines (pins) driver supports.
+
+endif # MUX_GPIO
+

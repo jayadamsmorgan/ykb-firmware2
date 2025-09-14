@@ -1,0 +1,14 @@
+menuconfig KSCAN
+	bool "KScan drivers"
+	help
+	  This option enables the KScan custom driver class.
+
+if KSCAN
+
+module = KSCAN
+module-str = kscan
+source "subsys/logging/Kconfig.template.log_config"
+
+rsource "Kconfig.muxes"
+
+endif # KSCAN

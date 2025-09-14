@@ -1,0 +1,2 @@
+config BOARD_DACTYL_V1
+	select SOC_STM32WB55XX

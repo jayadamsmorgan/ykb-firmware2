@@ -1,0 +1,14 @@
+menuconfig MUX
+	bool "Multiplexer device drivers"
+	help
+	  This option enables the custom driver class for generic MUXes.
+
+if MUX
+
+module = MUX
+module-str = mux
+source "subsys/logging/Kconfig.template.log_config"
+
+rsource "Kconfig.gpio"
+
+endif # MUX
