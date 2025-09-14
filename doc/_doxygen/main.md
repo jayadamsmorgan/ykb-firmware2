@@ -1,5 +1,5 @@
 # Introduction
 
-This is the Doxygen documentation for [example-application].
+This is the Doxygen documentation for [ykb-firmware2].
 
-[example-application]: https://github.com/zephyrproject-rtos/example-application
+[ykb-firmware2]: https://github.com/jayadamsmorgan/ykb-firmware2

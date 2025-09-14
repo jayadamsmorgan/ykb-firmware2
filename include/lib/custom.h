@@ -1,11 +1,7 @@
-/*
- * Copyright (c) 2021, Legrand North America, LLC.
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+// SPDX-License-Identifier: Apache-2.0
 
-#ifndef APP_LIB_CUSTOM_H_
-#define APP_LIB_CUSTOM_H_
+#ifndef LIB_CUSTOM_H_
+#define LIB_CUSTOM_H_
 
 /**
  * @defgroup lib_custom Custom library
@@ -34,4 +30,4 @@ int custom_get_value(int val);
 
 /** @} */
 
-#endif /* APP_LIB_CUSTOM_H_ */
+#endif /* LIB_CUSTOM_H_ */

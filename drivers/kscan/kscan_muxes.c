@@ -9,8 +9,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include <app/drivers/kscan.h>
-#include <app/drivers/mux.h>
+#include <drivers/kscan.h>
+#include <drivers/mux.h>
 
 LOG_MODULE_REGISTER(kscan_muxes, CONFIG_KSCAN_LOG_LEVEL);
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 description: |
   A generic binding for a GPIO-controlled blinking LED. Note that this binding
   has no vendor prefix, as it does not target a specific device or vendor.

@@ -1,5 +1,5 @@
-#ifndef APP_DRIVERS_MUX_H_
-#define APP_DRIVERS_MUX_H_
+#ifndef DRIVERS_MUX_H_
+#define DRIVERS_MUX_H_
 
 #include <zephyr/device.h>
 #include <zephyr/toolchain.h>
@@ -80,4 +80,4 @@ static inline int z_impl_mux_is_enabled(const struct device *dev) {
 
 #include <syscalls/mux.h>
 
-#endif /* APP_DRIVERS_MUX_H_ */
+#endif /* DRIVERS_MUX_H_ */

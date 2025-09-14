@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include <app/drivers/mux.h>
+#include <drivers/mux.h>
 
 LOG_MODULE_REGISTER(mux_gpio, CONFIG_MUX_LOG_LEVEL);
 

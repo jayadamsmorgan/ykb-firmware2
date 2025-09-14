@@ -17,17 +17,6 @@
 		zephyr,code-partition = &slot0_partition;
 	};
 
-	example_sensor: example-sensor {
-		compatible = "zephyr,example-sensor";
-		input-gpios = <&gpiob 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
-	};
-
-	blink_led: blink-led {
-		compatible = "blink-gpio-led";
-		led-gpios = <&gpiob 13 GPIO_ACTIVE_LOW>;
-		blink-period-ms = <1000>;
-	};
-
     mux1: mux1 {
         compatible = "mux-gpio";
         sel-gpios = <&gpiob 7 GPIO_ACTIVE_HIGH>,

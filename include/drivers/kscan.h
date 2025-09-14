@@ -1,5 +1,5 @@
-#ifndef APP_DRIVERS_KSCAN_H_
-#define APP_DRIVERS_KSCAN_H_
+#ifndef DRIVERS_KSCAN_H_
+#define DRIVERS_KSCAN_H_
 
 #include <zephyr/device.h>
 #include <zephyr/toolchain.h>
@@ -32,4 +32,4 @@ static inline int z_impl_kscan_poll_race(const struct device *dev) {
 
 #include <syscalls/kscan.h>
 
-#endif /* APP_DRIVERS_BLINK_H_ */
+#endif /* DRIVERS_BLINK_H_ */
