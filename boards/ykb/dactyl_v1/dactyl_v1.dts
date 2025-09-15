@@ -129,6 +129,10 @@
 	clocks = <&rcc STM32_SRC_HSI48 CLK48_SEL(0)>;
 };
 
+&ble_rf {
+    status = "okay";
+};
+
 &rcc {
 	clocks = <&clk_hse>;
 	clock-frequency = <DT_FREQ_M(32)>;

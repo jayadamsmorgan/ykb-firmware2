@@ -7,11 +7,13 @@ menuconfig YKB_USB_ENABLED
 if YKB_USB_ENABLED
     config YKB_USBD_MANUFACTURER
         string "USB device manufacturer string"
+        default "YarmanKeyboards"
         help
             USB device manufacturer string.
 
     config YKB_USBD_VID
         hex "USB deviced Vendor ID"
+        default 0x6969
         help
             USB device Vendor ID.
 
