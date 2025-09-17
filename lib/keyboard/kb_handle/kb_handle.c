@@ -13,7 +13,7 @@
 
 #include <string.h>
 
-LOG_MODULE_REGISTER(kb_handle, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
+LOG_MODULE_REGISTER(kb_handle, CONFIG_KB_HANDLE_LOG_LEVEL);
 
 static const struct device *const kscan = DEVICE_DT_GET(DT_PATH(kscan));
 

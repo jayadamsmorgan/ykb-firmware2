@@ -33,4 +33,8 @@ menu "Keyboard settings"
           Should be a value of 1-100  where 100 - key fully pressed down, 1 - just barely touched.
           This value is a part of keyboard settings and can be changed at runtime with YKBConfigurator.
 
+    module = KB_SETTINGS
+    module-str = kb_settings
+    source "subsys/logging/Kconfig.template.log_config"
+
 endmenu

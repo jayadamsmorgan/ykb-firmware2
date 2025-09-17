@@ -4,3 +4,7 @@ config LIB_BT_CONNECT
     depends on YKB_BT_ENABLED
     help
         This option enables the 'BTConnect' library.
+
+module = BT_CONNECT
+module-str = bt_connect
+source "subsys/logging/Kconfig.template.log_config"

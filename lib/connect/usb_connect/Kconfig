@@ -5,3 +5,6 @@ config LIB_USB_CONNECT
     help
       This option enables the 'USBConnect' library.
 
+module = USB_CONNECT
+module-str = usb_connect
+source "subsys/logging/Kconfig.template.log_config"

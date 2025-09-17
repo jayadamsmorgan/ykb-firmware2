@@ -1,3 +1,19 @@
 menu "Keyboard handling"
 
+    choice KB_HANDLE_REPORT_PRIORITY
+        bool "HID Report sending priority"
+        default KB_HANDLE_REPORT_PRIO_USB
+
+        config KB_HANDLE_REPORT_PRIO_USB
+            bool "USB first"
+
+        config KB_HANDLE_REPORT_PRIO_BT
+            bool "BT first"
+
+    endchoice
+
+    module = KB_HANDLE
+    module-str = kb_handle
+    source "subsys/logging/Kconfig.template.log_config"
+
 endmenu

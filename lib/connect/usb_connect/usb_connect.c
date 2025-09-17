@@ -5,7 +5,7 @@
 #include <zephyr/usb/class/hid.h>
 #include <zephyr/usb/class/usbd_hid.h>
 
-LOG_MODULE_REGISTER(usb_connect, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
+LOG_MODULE_REGISTER(usb_connect, CONFIG_USB_CONNECT_LOG_LEVEL);
 
 static const uint8_t hid_report_desc[] = HID_KEYBOARD_REPORT_DESC();
 

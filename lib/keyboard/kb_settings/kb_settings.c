@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 
-LOG_MODULE_REGISTER(kb_settings, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
+LOG_MODULE_REGISTER(kb_settings, CONFIG_KB_SETTINGS_LOG_LEVEL);
 
 // clang-format off
 #define KB_EXPAND(x) x
