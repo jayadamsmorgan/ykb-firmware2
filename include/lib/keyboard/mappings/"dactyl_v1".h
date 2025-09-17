@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+#define MAPPINGS_KB_LAYER_COUNT 1
+
 // LEFT:
 
 #ifndef KEY00
@@ -229,7 +231,7 @@
 #define KEY153 KEY_RIGHTSHIFT
 #endif // KEY153
 
-static uint8_t mappings[] = {
+static uint8_t default_mappings[] = {
 
 #if CONFIG_YKB_LEFT
 

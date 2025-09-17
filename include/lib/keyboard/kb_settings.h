@@ -25,4 +25,10 @@ typedef struct {
     uint8_t mappings[CONFIG_KB_KEY_COUNT * CONFIG_KB_MAX_LAYERS_SUPPORTED];
 } kb_settings_t;
 
+int kb_settings_init();
+
+kb_settings_t *kb_settings_get();
+
+void kb_settings_save();
+
 #endif // LIB_KB_SETTINGS_H_

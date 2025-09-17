@@ -102,9 +102,9 @@
 		mcuboot-button0 = &button_boot0;
 	};
 
-    eeprom {
+    eeprom: eeprom {
         compatible = "zephyr,emu-eeprom";
-        size = <DT_SIZE_K(8)>;
+        size = <DT_SIZE_K(3)>;
         pagesize = <DT_SIZE_K(4)>;
         partition = <&storage_partition>;
         rambuf;
