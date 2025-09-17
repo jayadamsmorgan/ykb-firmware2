@@ -1,0 +1,6 @@
+config LIB_BT_CONNECT
+    bool "Support for BLE HID connection"
+    default y
+    depends on YKB_BT_ENABLED
+    help
+        This option enables the 'BTConnect' library.

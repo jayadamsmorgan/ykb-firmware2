@@ -1,0 +1,20 @@
+config LIB_KB_SETTINGS
+    bool "Support for keyboard settings library"
+    default y
+    depends on YKB_USB_ENABLED
+    help
+      This option enables the 'KBSettings' library.
+
+if LIB_KB_SETTINGS
+
+    config KB_KEY_COUNT
+        int "Amount of keyboard keys"
+        help
+          Specify the amount of keys available
+
+    config KB_MAX_LAYERS_SUPPORTED
+        int "Maximum amount of layers supported by the keyboard"
+        range 1 10
+        default 5
+
+endif # LIB_KB_SETTINGS

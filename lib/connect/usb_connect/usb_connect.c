@@ -1,4 +1,4 @@
-#include <lib/usb_connect.h>
+#include <lib/connect/usb_connect.h>
 
 #include "usbd_init.h"
 

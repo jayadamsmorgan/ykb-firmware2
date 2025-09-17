@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menu "Connection"
+
+rsource "usb_connect/Kconfig"
+rsource "bt_connect/Kconfig"
+
+endmenu

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menu "Keyboard"
+
+    rsource "kb_handle/Kconfig"
+    rsource "kb_settings/Kconfig"
+
+endmenu

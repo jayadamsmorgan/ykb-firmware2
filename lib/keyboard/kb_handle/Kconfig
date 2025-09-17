@@ -1,0 +1,28 @@
+config LIB_KB_HANDLE
+    bool "Support for keyboard handling library"
+    default y
+    depends on YKB_USB_ENABLED
+    help
+      This option enables the 'KBHandle' library.
+
+if LIB_KB_HANDLE
+
+    config KB_HANDLE_DEFAULT_KEYPRESS_THRESHOLD
+        int "Default key press threshold (%age)"
+        range 1 100
+        default 50
+        help
+          Default threshold of when a key is considered pressed on a keyboard.
+          Should be a value of 1-100  where 100 - key fully pressed down, 1 - just barely touched.
+          This value is a part of keyboard settings and can be changed at runtime with YKBConfigurator.
+
+    config KB_HANDLE_DEFAULT_MAX_PRESSED_VALUE
+        int "Default key press maximum value"
+        range 100 1023
+        default 1023
+        help
+          Default value when a key is considered fully pressed down.
+          This value is a part of keyboard settings and can be changed at runtime
+          with YKBConfigurator during calibration process.
+
+endif # LIB_KB_HANDLE

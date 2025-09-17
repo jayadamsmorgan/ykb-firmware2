@@ -5,29 +5,30 @@
 #include <zephyr/toolchain.h>
 
 __subsystem struct kscan_driver_api {
-    int (*poll_normal)(const struct device *dev, uint8_t *pressed_keys,
-                       size_t max_pressed_keys);
-    int (*poll_race)(const struct device *dev);
+    int (*poll_normal)(const struct device *dev, bool *pressed_keys,
+                       uint16_t threshold);
+    int (*poll_race)(const struct device *dev, uint16_t threshold);
 };
 
-__syscall int kscan_poll_normal(const struct device *dev, uint8_t *pressed_keys,
-                                size_t max_pressed_keys);
+__syscall int kscan_poll_normal(const struct device *dev, bool *pressed_keys,
+                                uint16_t threshold);
 
 static inline int z_impl_kscan_poll_normal(const struct device *dev,
-                                           uint8_t *pressed_keys,
-                                           size_t max_pressed_keys) {
+                                           bool *pressed_keys,
+                                           uint16_t threshold) {
     __ASSERT_NO_MSG(DEVICE_API_IS(kscan, dev));
 
     return DEVICE_API_GET(kscan, dev)
-        ->poll_normal(dev, pressed_keys, max_pressed_keys);
+        ->poll_normal(dev, pressed_keys, threshold);
 }
 
-__syscall int kscan_poll_race(const struct device *dev);
+__syscall int kscan_poll_race(const struct device *dev, uint16_t threshold);
 
-static inline int z_impl_kscan_poll_race(const struct device *dev) {
+static inline int z_impl_kscan_poll_race(const struct device *dev,
+                                         uint16_t threshold) {
     __ASSERT_NO_MSG(DEVICE_API_IS(kscan, dev));
 
-    return DEVICE_API_GET(kscan, dev)->poll_race(dev);
+    return DEVICE_API_GET(kscan, dev)->poll_race(dev, threshold);
 }
 
 #include <syscalls/kscan.h>

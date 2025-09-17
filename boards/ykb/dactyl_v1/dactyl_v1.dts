@@ -101,6 +101,15 @@
 		mcuboot-led0 = &led_error_status;
 		mcuboot-button0 = &button_boot0;
 	};
+
+    eeprom {
+        compatible = "zephyr,emu-eeprom";
+        size = <DT_SIZE_K(8)>;
+        pagesize = <DT_SIZE_K(4)>;
+        partition = <&storage_partition>;
+        rambuf;
+        partition-erase;
+    };
 };
 
 &die_temp {
@@ -185,6 +194,8 @@
 	pinctrl-names = "default";
 	st,adc-clock-source = "SYNC";
 	st,adc-prescaler = <4>;
+    resolutions = <STM32_ADC_RES(10, 0x00)>;
+    sampling-times = <3>;
 	status = "okay";
 };
 
