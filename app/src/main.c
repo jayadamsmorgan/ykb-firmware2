@@ -9,6 +9,9 @@
 #include <lib/connect/bt_connect.h>
 #include <lib/connect/usb_connect.h>
 
+#include <lib/keyboard/kb_handle.h>
+#include <lib/keyboard/kb_settings.h>
+
 #include <app_version.h>
 
 LOG_MODULE_REGISTER(main, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
@@ -43,6 +46,17 @@ int main(void) {
         return 0;
     }
     printk("BTConnect is ready!\n");
+
+    ret = kb_settings_init();
+    if (ret) {
+        LOG_ERR("KBSettings init error: %d", ret);
+        return 0;
+    }
+    printk("KBSettings is ready!\n");
+
+    while (true) {
+        kb_handle();
+    }
 
     return 0;
 }

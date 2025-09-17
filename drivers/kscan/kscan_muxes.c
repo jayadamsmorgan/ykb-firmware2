@@ -51,11 +51,13 @@ static bool kscan_key_pressed_by_threshold(const struct kscan_muxes_config *cfg,
     return true;
 }
 
-static int kscan_muxes_poll_normal(const struct device *dev, bool *pressed_keys,
-                                   uint16_t threshold) {
+static int kscan_muxes_poll_normal(const struct device *dev,
+                                   uint8_t *pressed_keys,
+                                   uint16_t *thresholds) {
     const struct kscan_muxes_config *cfg = dev->config;
     int err, ch_cnt;
-    size_t key_index = 0;
+    uint8_t key_index = 0;
+    uint8_t pressed_count = 0;
 
     for (uint8_t i = 0; i < cfg->mux_cnt; ++i) {
         const struct device *mux = cfg->muxes[i];
@@ -67,8 +69,13 @@ static int kscan_muxes_poll_normal(const struct device *dev, bool *pressed_keys,
             return -1;
         }
         for (int j = 0; j < ch_cnt; ++j) {
-            if (kscan_key_pressed_by_threshold(cfg, spec, NULL, threshold)) {
-                pressed_keys[key_index] = true;
+            if (kscan_key_pressed_by_threshold(cfg, spec, NULL,
+                                               thresholds[key_index])) {
+                pressed_keys[pressed_count] = key_index;
+                pressed_count++;
+                if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
+                    return pressed_count;
+                }
             }
             err = mux_select_next(dev);
             if (err) {
@@ -80,10 +87,11 @@ static int kscan_muxes_poll_normal(const struct device *dev, bool *pressed_keys,
         }
     }
 
-    return 0;
+    return pressed_count;
 }
 
-static int kscan_muxes_poll_race(const struct device *dev, uint16_t threshold) {
+static int kscan_muxes_poll_race(const struct device *dev,
+                                 uint16_t *thresholds) {
     const struct kscan_muxes_config *cfg = dev->config;
     int err, ch_cnt;
     int max_val = 0;
@@ -101,7 +109,8 @@ static int kscan_muxes_poll_race(const struct device *dev, uint16_t threshold) {
         }
         for (int j = 0; j < ch_cnt; ++j) {
             uint16_t value;
-            if (kscan_key_pressed_by_threshold(cfg, spec, &value, threshold)) {
+            if (kscan_key_pressed_by_threshold(cfg, spec, &value,
+                                               thresholds[index])) {
                 if (max_val < value) {
                     max_val = value;
                     pressed_index = index;

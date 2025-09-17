@@ -14,10 +14,16 @@ if KSCAN
             bool "KScan MUXes driver backend"
             depends on DT_HAS_KSCAN_MUXES_ENABLED
             select ADC
+            select MUX
             help
               Enable this option to use the logic of multiplexors to poll keyboard keys.
 
     endchoice
+
+    config KSCAN_MAX_SIMULTANIOUS_KEYS
+        int "Maximum simultanious keys registered at once"
+        range 1 KB_KEY_COUNT
+        default 5
 
     module = KSCAN
     module-str = kscan

@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(kb_settings, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
 #define KB_EXPAND(x) x
 #define KB_CONCAT(n1, n2, n3) <KB_EXPAND(n1)KB_EXPAND(n2)KB_EXPAND(n3)>
 // Include the right mapping based on the board
-#include KB_CONCAT(lib/keyboard/mappings/, CONFIG_BOARD, .h)
+#include KB_CONCAT(lib/keyboard/mappings/,CONFIG_BOARD,.h)
 // clang-format on
 
 #define DEF_MAP default_mappings
