@@ -5,6 +5,36 @@ config LIB_BT_CONNECT
     help
         This option enables the 'BTConnect' library.
 
+if LIB_BT_CONNECT
+
+    config BT_INTER_KB_COMM
+        bool "Inter-keyboard communication"
+        default y
+        help
+          Enables communication between two keyboard halves
+          to act as one keyboard if connected.
+
+    if BT_INTER_KB_COMM
+
+        choice BT_CONNECT_MASTER
+            bool "Inter-keyboard communication master"
+            default BT_CONNECT_MASTER_RIGHT
+            help
+              Keyboard half considered to be master in
+              inter-keyboard communication
+
+            config BT_CONNECT_MASTER_LEFT
+                bool "Left"
+
+            config BT_CONNECT_MASTER_RIGHT
+                bool "Right"
+
+        endchoice
+
+    endif # BT_INTER_KB_COMM
+
+endif # LIB_BT_CONNECT
+
 module = BT_CONNECT
 module-str = bt_connect
 source "subsys/logging/Kconfig.template.log_config"

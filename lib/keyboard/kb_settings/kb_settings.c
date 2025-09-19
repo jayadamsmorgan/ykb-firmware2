@@ -72,8 +72,6 @@ static int kb_settings_load_eeprom() {
     }
 
     struct eeprom_kb_settings_pack pack = {0};
-    uint16_t blank_crc =
-        crc16((const uint8_t *)&pack.settings, sizeof(kb_settings_t));
 
     int err =
         eeprom_read(eeprom, 0, &pack, sizeof(struct eeprom_kb_settings_pack));
@@ -87,14 +85,8 @@ static int kb_settings_load_eeprom() {
     uint16_t crc =
         crc16((const uint8_t *)&pack.settings, sizeof(kb_settings_t));
 
-    if (pack.crc16 == 0 && crc == blank_crc) {
-        LOG_INF("First time boot detected.");
-        return 1;
-    }
-
     if (pack.crc16 != crc) {
-        LOG_ERR("Unable to read keyboard settings from EEPROM: CRC16 do not "
-                "match.");
+        LOG_WRN("CRC mismatch, EEPROM data is either corrupt or empty.");
         return -3;
     }
 
@@ -123,20 +115,31 @@ static void kb_settings_save_eeprom() {
 #define SETTINGS_LOAD() kb_settings_load_eeprom()
 #define SETTINGS_SAVE() kb_settings_save_eeprom()
 #else
-#define SETTINGS_LOAD() 1
+#define SETTINGS_LOAD() -1
 #define SETTINGS_SAVE()
 #endif // CONFIG_EEPROM
 
 static void kb_settings_load_default() {
     settings.key_polling_rate = CONFIG_KB_SETTINGS_DEFAULT_POLLING_RATE;
+
+    float range =
+        CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM - CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
+    float default_threshold =
+        ((range / 100) * CONFIG_KB_SETTINGS_DEFAULT_THRESHOLD) +
+        CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
+
+    LOG_INF("Default threshold value: %d", (uint16_t)default_threshold);
+
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
-        settings.key_thresholds[i] = CONFIG_KB_SETTINGS_DEFAULT_THRESHOLD;
+        settings.key_thresholds[i] = (uint16_t)default_threshold;
         settings.minimums[i] = CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
         settings.maximums[i] = CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM;
     }
+
     settings.layer_count = MAPPINGS_KB_LAYER_COUNT;
     settings.layer_index = 0;
     settings.mode = KB_MODE_NORMAL;
+
     memcpy(settings.mappings, DEF_MAP, sizeof(DEF_MAP));
 }
 
@@ -145,9 +148,12 @@ int kb_settings_init() {
     int res;
 
     res = SETTINGS_LOAD();
-    if (res) {
+
+    if (res)
         kb_settings_load_default();
-    }
+
+    if (res > 0) // Stored settings either corrupt or empty
+        SETTINGS_SAVE();
 
     return 0;
 }

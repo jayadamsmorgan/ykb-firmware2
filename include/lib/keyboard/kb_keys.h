@@ -234,6 +234,11 @@
 // Custom
 
 #define KEY_FN 0xE8
-#define KEY_LAYER 0xE9
+#define KEY_LAYER_NEXT 0xE9
+#define KEY_LAYER_PREV 0xEA
+#define KEY_LAYER_SEL 0xEB
+#define KEY_LAYER_1 0xEC
+#define KEY_LAYER_2 0xED
+#define KEY_LAYER_3 0xEE
 
 #endif // KB_KEYS_H

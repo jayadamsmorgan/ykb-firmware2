@@ -51,7 +51,7 @@
 #define KEY23 KEY_X
 #endif // KEY23
 #ifndef KEY24
-#define KEY24 KEY_LAYER
+#define KEY24 KEY_LAYER_2
 #endif // KEY24
 
 #ifndef KEY30

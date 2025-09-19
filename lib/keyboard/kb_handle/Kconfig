@@ -3,6 +3,8 @@ menu "Keyboard handling"
     choice KB_HANDLE_REPORT_PRIORITY
         bool "HID Report sending priority"
         default KB_HANDLE_REPORT_PRIO_USB
+        depends on LIB_BT_CONNECT
+        depends on LIB_USB_CONNECT
 
         config KB_HANDLE_REPORT_PRIO_USB
             bool "USB first"

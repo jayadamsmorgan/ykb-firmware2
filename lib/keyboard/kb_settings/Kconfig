@@ -17,17 +17,15 @@ menu "Keyboard settings"
     config KB_SETTINGS_DEFAULT_MINIMUM
         int "Default value for key not pressed"
         range 0 1023
-        default 0
 
     config KB_SETTINGS_DEFAULT_MAXIMUM
         int "Default value for key pressed fully"
         range 0 1023
-        default 1023
 
     config KB_SETTINGS_DEFAULT_THRESHOLD
         int "Default key press threshold (%age)"
         range 1 100
-        default 50
+        default 65
         help
           Default threshold of when a key is considered pressed on a keyboard.
           Should be a value of 1-100  where 100 - key fully pressed down, 1 - just barely touched.

@@ -45,7 +45,7 @@ static bool kscan_key_pressed_by_threshold(const struct kscan_muxes_config *cfg,
     if (val < threshold) {
         return false;
     }
-    if (val) {
+    if (value) {
         *value = val;
     }
     return true;
@@ -69,6 +69,12 @@ static int kscan_muxes_poll_normal(const struct device *dev,
             return -1;
         }
         for (int j = 0; j < ch_cnt; ++j) {
+            err = mux_select_next(mux);
+            if (err) {
+                LOG_ERR("Could not select channel %d for MUX '%s' (%d)", j,
+                        mux->name, err);
+                return -2;
+            }
             if (kscan_key_pressed_by_threshold(cfg, spec, NULL,
                                                thresholds[key_index])) {
                 pressed_keys[pressed_count] = key_index;
@@ -76,12 +82,6 @@ static int kscan_muxes_poll_normal(const struct device *dev,
                 if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
                     return pressed_count;
                 }
-            }
-            err = mux_select_next(dev);
-            if (err) {
-                LOG_ERR("Could not select channel %d for MUX '%s' (%d)", j,
-                        mux->name, err);
-                return -2;
             }
             key_index++;
         }

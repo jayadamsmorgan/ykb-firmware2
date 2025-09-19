@@ -30,42 +30,88 @@ static uint32_t prev_down[KB_BITMAP_WORDS];
 static const uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
                                         0x10, 0x20, 0x40, 0x80};
 
+bool layer_select = false;
+bool fn_pressed = false;
+
 static inline void for_each_set_bit(uint32_t word, uint16_t base,
-                                    void (*fn)(uint16_t idx, void *ctx),
-                                    void *ctx) {
+                                    void (*fn)(uint16_t idx,
+                                               kb_settings_t *settings),
+                                    kb_settings_t *settings) {
     while (word) {
         uint32_t b = __builtin_ctz(word);
-        fn((uint16_t)(base + b), ctx);
-        word &= word - 1; // clear lowest set bit
+        fn((uint16_t)(base + b), settings);
+        word &= word - 1;
     }
 }
 
-static void on_press(uint16_t key_index, void *ctx) {
-    kb_settings_t *settings = ctx;
+static void on_press(uint16_t key_index, kb_settings_t *settings) {
     uint8_t code =
         settings
             ->mappings[settings->layer_index * CONFIG_KB_KEY_COUNT + key_index];
 
     LOG_DBG("Key with index %d and HID code 0x%X pressed", key_index, code);
 
-    // Edge-triggered special keys:
-    if (code == KEY_LAYER && settings->layer_count > 1) {
-        settings->layer_index =
-            (settings->layer_index + 1) % settings->layer_count;
+    if (code < KEY_FN) {
+
+        if (fn_pressed) {
+
+        } else if (layer_select && code >= KEY_1_EXCLAMATION &&
+                   code <= KEY_0_RPAREN) {
+            uint8_t layer_index = code - KEY_1_EXCLAMATION;
+            if (layer_index < settings->layer_count) {
+                settings->layer_index = layer_index;
+            }
+        } else {
+            return;
+        }
+
+    } else if (code == KEY_FN) {
+
+        fn_pressed = true;
         return;
-    }
-    if (code == KEY_FN) {
-        // set FN state if you need momentary layer etc.
-        return;
+
+    } else if (code >= KEY_LAYER_NEXT && settings->layer_count > 1) {
+
+        switch (code) {
+        case KEY_LAYER_NEXT:
+            settings->layer_index =
+                (settings->layer_index + 1) % settings->layer_count;
+            break;
+        case KEY_LAYER_PREV:
+            settings->layer_index =
+                (settings->layer_index - 1) % settings->layer_count;
+            break;
+        case KEY_LAYER_SEL:
+            layer_select = true;
+            break;
+        case KEY_LAYER_1:
+            settings->layer_index = 0;
+            break;
+        case KEY_LAYER_2:
+            settings->layer_index = 1;
+            break;
+        case KEY_LAYER_3:
+            if (settings->layer_count >= 3)
+                settings->layer_index = 2;
+            break;
+        default:
+            LOG_ERR("Unknown key code 0x%X", code);
+            break;
+        }
     }
 }
 
-static void on_release(uint16_t key_index, void *ctx) {
-    kb_settings_t *settings = ctx;
+static void on_release(uint16_t key_index, kb_settings_t *settings) {
     uint8_t code =
         settings
             ->mappings[settings->layer_index * CONFIG_KB_KEY_COUNT + key_index];
     LOG_DBG("Key with index %d and HID code 0x%X released", key_index, code);
+
+    if (code == KEY_LAYER_SEL) {
+        layer_select = false;
+    } else if (code == KEY_FN) {
+        fn_pressed = false;
+    }
     // Edge-triggered release behaviors if you need them (tap dance, etc.)
 }
 
@@ -152,9 +198,28 @@ void kb_handle() {
 
     memcpy(prev_down, curr_down, sizeof(prev_down));
 
+#if CONFIG_KB_HANDLE_REPORT_PRIO_USB
     if (usb_connect_is_ready()) {
+        usb_connect_handle_wakeup();
         usb_connect_send(report);
     } else if (bt_connect_is_ready()) {
         bt_connect_send(report);
     }
+#elif CONFIG_KB_HANDLE_REPORT_PRIO_BT
+    if (bt_connect_is_ready()) {
+        bt_connect_send(report);
+    } else if (usb_connect_is_ready()) {
+        usb_connect_handle_wakeup();
+        usb_connect_send(report);
+    }
+#elif CONFIG_LIB_BT_CONNECT
+    if (bt_connect_is_ready()) {
+        bt_connect_send(report);
+    }
+#elif CONFIG_LIB_USB_CONNECT
+    if (usb_connect_is_ready()) {
+        usb_connect_handle_wakeup();
+        usb_connect_send(report);
+    }
+#endif // CONFIG_KB_HANDLE_REPORT_PRIO_USB
 }
