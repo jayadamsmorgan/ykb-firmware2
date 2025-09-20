@@ -86,7 +86,9 @@ static int kb_settings_load_eeprom() {
         crc16((const uint8_t *)&pack.settings, sizeof(kb_settings_t));
 
     if (pack.crc16 != crc) {
-        LOG_WRN("CRC mismatch, EEPROM data is either corrupt or empty.");
+        LOG_WRN("CRC mismatch (0x%04X != 0x%04X), EEPROM data is either "
+                "corrupt or empty.",
+                pack.crc16, crc);
         return -3;
     }
 
@@ -102,6 +104,7 @@ static void kb_settings_save_eeprom() {
         .crc16 = crc16((const uint8_t *)&settings, sizeof(kb_settings_t)),
         .settings = settings,
     };
+    LOG_DBG("Saving keyboard settings to EEPROM with CRC 0x%02X", pack.crc16);
     int res =
         eeprom_write(eeprom, 0, &pack, sizeof(struct eeprom_kb_settings_pack));
     if (res) {

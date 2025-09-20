@@ -1,0 +1,5 @@
+if LED_STRIP
+
+rsource "Kconfig.ws2812"
+
+endif # LED_STRIP

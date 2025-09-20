@@ -198,6 +198,10 @@ void kb_handle() {
 
     memcpy(prev_down, curr_down, sizeof(prev_down));
 
+    if (fn_pressed) {
+        return;
+    }
+
 #if CONFIG_KB_HANDLE_REPORT_PRIO_USB
     if (usb_connect_is_ready()) {
         usb_connect_handle_wakeup();

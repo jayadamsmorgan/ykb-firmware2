@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menu "Drivers"
-rsource "kscan/Kconfig"
-rsource "mux/Kconfig"
+    rsource "kscan/Kconfig"
+    rsource "mux/Kconfig"
+    rsource "led_strip/Kconfig"
 endmenu

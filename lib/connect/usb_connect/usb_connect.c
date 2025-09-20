@@ -77,7 +77,7 @@ static void msg_cb(struct usbd_context *const usbd_ctx,
     LOG_INF("USBD message: %s", usbd_msg_type_string(msg->type));
 
     if (msg->type == USBD_MSG_CONFIGURATION) {
-        LOG_INF("\tConfiguration value %d", msg->status);
+        LOG_INF("Configuration value %d", msg->status);
     }
 
     if (usbd_can_detect_vbus(usbd_ctx)) {
