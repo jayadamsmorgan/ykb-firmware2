@@ -2,316 +2,375 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT worldsemi_ws2812_pwm
+#define DT_DRV_COMPAT ws2812_pwm_dma_stm32wb
 
 #include <stdint.h>
+#include <stm32wbxx_hal.h>
+#include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/devicetree/pwms.h>
-#include <zephyr/drivers/dma.h>
 #include <zephyr/drivers/led_strip.h>
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/sys_io.h>
 #include <zephyr/sys/util.h>
 
-LOG_MODULE_REGISTER(ws2812_pwm, CONFIG_LED_STRIP_LOG_LEVEL);
+LOG_MODULE_REGISTER(ws2812_pwm_dma_stm32, CONFIG_LED_STRIP_LOG_LEVEL);
 
-/* WS2812 timing (@800 kHz) */
-#define WS2812_BIT_NS 1250U
 #define WS2812_T0H_NS 350U
 #define WS2812_T1H_NS 700U
 #define WS2812_RESET_US 80U
 
 struct ws2812_pwm_cfg {
-    struct pwm_dt_spec pwm;
+    uint32_t bit_rate;
 
-    /* DMA from DT (controller dev, channel id, optional slot/request) */
-    const struct device *dma_dev;
-    uint32_t dma_channel;
-    uint32_t dma_slot; /* set from DT; 0 if unused by your binding */
-
-    /* Timer register addresses (DT-provided; vendor-specific as data) */
-    uint32_t ccr_addr;  /* TIMx->CCRy */
-    uint32_t dier_addr; /* TIMx->DIER */
-    uint8_t dier_bit;   /* DIER bit to enable DMA request (CCyDE or UDE) */
+    size_t dma_seq_len_max;
 
     uint8_t num_colors;
     const uint8_t *color_mapping;
+
+    uint8_t dma_chan_irqn;
+
     size_t length;
 };
 
 struct ws2812_pwm_data {
-    struct k_sem dma_done;
+
+    uint8_t tim_channel;
+
+    TIM_HandleTypeDef htim;
+    DMA_HandleTypeDef hdma;
+
+    uint32_t ws_period_ticks;
+    uint32_t ws_t0h_ticks;
+    uint32_t ws_t1h_ticks;
+    uint32_t ws_reset_slots;
+
+    struct k_sem ws_sem;
+    bool sem_release;
+
+    uint32_t *dma_buff;
+
+    size_t dma_seq_len;
+
+    void (*post_init)(void);
 };
 
-/* ---------------- DMA callback ---------------- */
-static void ws2812_dma_cb(const struct device *dma_dev, void *user_data,
-                          uint32_t channel, int status) {
-    ARG_UNUSED(dma_dev);
-    ARG_UNUSED(channel);
-    ARG_UNUSED(status);
-    struct ws2812_pwm_data *data = user_data;
-    k_sem_give(&data->dma_done);
-}
-
-/* ---------------- Timing helpers --------------- */
-static int ws2812_calc_cycles(const struct pwm_dt_spec *pwm,
-                              uint32_t *period_cyc, uint32_t *duty0_cyc,
-                              uint32_t *duty1_cyc) {
-    uint64_t clk_hz = 0;
-    int rc = pwm_get_cycles_per_sec(pwm->dev, pwm->channel, &clk_hz);
-    if (rc) {
-        return rc;
+static void ws_encode24(uint32_t grb24, uint32_t *out, size_t *pos,
+                        uint32_t ws_t1h_ticks, uint32_t ws_t0h_ticks) {
+    for (int bit = 23; bit >= 0; --bit) {
+        bool one = (grb24 >> bit) & 1U;
+        out[(*pos)++] = one ? ws_t1h_ticks : ws_t0h_ticks;
     }
-
-    uint64_t period = (clk_hz * WS2812_BIT_NS) / 1000000000ULL;
-    if (period == 0)
-        period = 1;
-
-    uint64_t d0 = (clk_hz * WS2812_T0H_NS) / 1000000000ULL;
-    uint64_t d1 = (clk_hz * WS2812_T1H_NS) / 1000000000ULL;
-
-    if (d0 == 0)
-        d0 = 1;
-    if (d1 == 0)
-        d1 = 1;
-    if (d0 >= period)
-        d0 = period - 1;
-    if (d1 >= period)
-        d1 = period - 1;
-
-    *period_cyc = (uint32_t)period;
-    *duty0_cyc = (uint32_t)d0;
-    *duty1_cyc = (uint32_t)d1;
-    return 0;
 }
 
-/* ---------------- LED Strip API ---------------- */
-
-static int ws2812_pwm_update_channels(const struct device *dev,
-                                      uint8_t *channels, size_t num_channels) {
+static void ws_build_buffer(const struct device *dev, struct led_rgb *pixels,
+                            size_t num_pixels) {
     const struct ws2812_pwm_cfg *cfg = dev->config;
     struct ws2812_pwm_data *data = dev->data;
 
-    if (!channels || cfg->length == 0 || cfg->num_colors == 0) {
-        return -EINVAL;
-    }
-    if (num_channels != cfg->length * cfg->num_colors) {
-        LOG_ERR("%s: channels=%zu != length(%zu)*num_colors(%u)", dev->name,
-                num_channels, cfg->length, cfg->num_colors);
-        return -EINVAL;
+    size_t p = 0;
+
+    for (size_t i = 0; i < num_pixels; ++i) {
+        uint32_t grb = ((uint32_t)pixels[i].g << 16) |
+                       ((uint32_t)pixels[i].r << 8) |
+                       ((uint32_t)pixels[i].b << 0);
+        ws_encode24(grb, data->dma_buff, &p, data->ws_t1h_ticks,
+                    data->ws_t0h_ticks);
     }
 
-    /* Set PWM period once (duty 0) */
-    uint32_t period_cyc, duty0_cyc, duty1_cyc;
-    int rc = ws2812_calc_cycles(&cfg->pwm, &period_cyc, &duty0_cyc, &duty1_cyc);
-    if (rc) {
-        LOG_ERR("pwm timing calc failed: %d", rc);
-        return rc;
-    }
-    rc = pwm_set_cycles(cfg->pwm.dev, cfg->pwm.channel, period_cyc, 0,
-                        cfg->pwm.flags);
-    if (rc) {
-        LOG_ERR("pwm_set_cycles failed: %d", rc);
-        return rc;
+    /* Reset tail: keep line low by producing 0-high pulses for many bit slots.
+       For PWM1 mode, CCR=0 → output stays low for entire slot. */
+    for (uint32_t i = 0; i < data->ws_reset_slots; ++i) {
+        data->dma_buff[p++] = 0;
     }
 
-    /* Build duty sequence on stack: one halfword per data bit */
-    const size_t duty_len = num_channels * 8U;
-    if (duty_len > 4096U) { /* keep stack reasonable; adjust if needed */
-        LOG_ERR("frame too large for stack buffer: %zu bits", duty_len);
-        return -E2BIG;
-    }
-    uint16_t duty[duty_len];
-    size_t k = 0;
-    for (size_t i = 0; i < num_channels; ++i) {
-        uint8_t v = channels[i];
-        for (int b = 7; b >= 0; --b) {
-            duty[k++] =
-                (v & BIT(b)) ? (uint16_t)duty1_cyc : (uint16_t)duty0_cyc;
+    data->dma_seq_len = MIN(p, cfg->dma_seq_len_max);
+}
+
+/* Build DMA buffer directly from channel array using DT color_mapping. */
+static void ws_build_buffer_channels(const struct device *dev,
+                                     const uint8_t *ch, size_t nch) {
+    const struct ws2812_pwm_cfg *cfg = dev->config;
+    struct ws2812_pwm_data *data = dev->data;
+
+    size_t p = 0;
+    const uint8_t ncol = cfg->num_colors; /* e.g. 3 */
+    const size_t maxp = cfg->length;
+
+    /* Each LED consumes ncol channel values, ordered per color_mapping */
+    size_t leds = nch / ncol;
+    if (leds > maxp)
+        leds = maxp;
+
+    for (size_t i = 0; i < leds; ++i) {
+        const uint8_t *px = &ch[i * ncol];
+
+        /* Map into GRB 24-bit word as the WS2812 encoder expects (G,R,B). */
+        /* color_mapping entries are LED_COLOR_ID_* values. */
+        uint8_t r = 0, g = 0, b = 0;
+        for (uint8_t k = 0; k < ncol; ++k) {
+            uint8_t id = cfg->color_mapping[k];
+            switch (id) {
+            case LED_COLOR_ID_RED:
+                r = px[k];
+                break;
+            case LED_COLOR_ID_GREEN:
+                g = px[k];
+                break;
+            case LED_COLOR_ID_BLUE:
+                b = px[k];
+                break;
+            default: /* ignore unsupported colors */
+                break;
+            }
         }
+
+        uint32_t grb = ((uint32_t)g << 16) | ((uint32_t)r << 8) | (uint32_t)b;
+        ws_encode24(grb, data->dma_buff, &p, data->ws_t1h_ticks,
+                    data->ws_t0h_ticks);
     }
 
-    if (!device_is_ready(cfg->dma_dev)) {
-        LOG_ERR("DMA device not ready");
-        return -ENODEV;
+    /* Reset tail keeps line low */
+    for (uint32_t i = 0; i < data->ws_reset_slots; ++i) {
+        data->dma_buff[p++] = 0;
     }
 
-    /* Prepare DMA block: memory -> TIMx->CCRy, halfword */
-    struct dma_block_config blk = {0};
-    blk.block_size = (uint32_t)(duty_len * sizeof(uint16_t));
-    blk.source_address = (uint32_t)(uintptr_t)duty;
-    blk.dest_address = (uint32_t)cfg->ccr_addr;
+    data->dma_seq_len = MIN(p, cfg->dma_seq_len_max);
+}
 
-    struct dma_config dcfg = {0};
-    dcfg.user_data = data;
-    dcfg.dma_callback = ws2812_dma_cb;
-    dcfg.head_block = &blk;
-    dcfg.channel_direction = MEMORY_TO_PERIPHERAL;
+/* Kick DMA transfer of ws_buf[] into CCR4 each update event. */
+static void ws_start_dma(const struct device *dev) {
+    struct ws2812_pwm_data *data = dev->data;
 
-    dcfg.source_data_size = 2; /* halfword */
-    dcfg.dest_data_size = 2;
-    dcfg.source_burst_length = 1;
-    dcfg.dest_burst_length = 1;
-    dcfg.dma_slot = cfg->dma_slot; /* 0 if binding doesn’t use it */
+    /* Ensure CCR starts at 0 (idle low) before streaming */
+    __HAL_TIM_SET_COMPARE(&data->htim, data->tim_channel, 0);
 
-    /* Enable timer’s DMA request (DIER.CCyDE or UDE). Address/bit from DT. */
-    sys_set_bit((mem_addr_t)cfg->dier_addr, cfg->dier_bit);
-
-    rc = dma_config(cfg->dma_dev, cfg->dma_channel, &dcfg);
-    if (rc) {
-        LOG_ERR("dma_config ch%u failed: %d", (unsigned)cfg->dma_channel, rc);
-        sys_clear_bit((mem_addr_t)cfg->dier_addr, cfg->dier_bit);
-        return rc;
-    }
-
-    k_sem_reset(&data->dma_done);
-
-    rc = dma_start(cfg->dma_dev, cfg->dma_channel);
-    if (rc) {
-        LOG_ERR("dma_start ch%u failed: %d", (unsigned)cfg->dma_channel, rc);
-        sys_clear_bit((mem_addr_t)cfg->dier_addr, cfg->dier_bit);
-        return rc;
-    }
-
-    /* Wait for all bits (one CCR write per PWM period) */
-    (void)k_sem_take(&data->dma_done, K_FOREVER);
-
-    /* Stop DMA + disable peripheral DMA request */
-    (void)dma_stop(cfg->dma_dev, cfg->dma_channel);
-    sys_clear_bit((mem_addr_t)cfg->dier_addr, cfg->dier_bit);
-
-    /* Latch (keep low for reset time) */
-    (void)pwm_set_cycles(cfg->pwm.dev, cfg->pwm.channel, period_cyc, 0,
-                         cfg->pwm.flags);
-    k_busy_wait(WS2812_RESET_US);
-
-    return 0;
+    /* Start PWM + DMA: HAL will trigger DMA on CC4 request to load CCR4 */
+    HAL_TIM_PWM_Start_DMA((TIM_HandleTypeDef *)&data->htim, data->tim_channel,
+                          (uint32_t *)data->dma_buff,
+                          (uint16_t)data->dma_seq_len);
 }
 
 static int ws2812_pwm_update_rgb(const struct device *dev,
                                  struct led_rgb *pixels, size_t num_pixels) {
-    const struct ws2812_pwm_cfg *cfg = dev->config;
+    struct ws2812_pwm_data *data = dev->data;
 
-    if (!pixels || num_pixels == 0) {
-        return 0;
-    }
-
-    const size_t need = (size_t)cfg->num_colors * num_pixels;
-    if (need > 2048U) { /* keep stack reasonable; adjust if needed */
-        LOG_ERR("pixel frame too large for stack buffer: %zu bytes", need);
-        return -E2BIG;
-    }
-    uint8_t channels[need];
-
-    for (size_t i = 0; i < num_pixels; ++i) {
-        const struct led_rgb p = pixels[i];
-        const size_t base = i * cfg->num_colors;
-        for (uint8_t c = 0; c < cfg->num_colors; ++c) {
-            switch (cfg->color_mapping[c]) {
-            case LED_COLOR_ID_RED:
-                channels[base + c] = p.r;
-                break;
-            case LED_COLOR_ID_GREEN:
-                channels[base + c] = p.g;
-                break;
-            case LED_COLOR_ID_BLUE:
-                channels[base + c] = p.b;
-                break;
-            case LED_COLOR_ID_WHITE:
-                channels[base + c] = 0;
-                break;
-            default:
-                channels[base + c] = 0;
-                break;
-            }
-        }
-    }
-
-    return ws2812_pwm_update_channels(dev, channels, need);
+    ws_build_buffer(dev, pixels, num_pixels);
+    k_sem_reset(&data->ws_sem);
+    data->sem_release = false;
+    ws_start_dma(dev);
+    k_sem_take(&data->ws_sem, K_FOREVER);
+    HAL_TIM_PWM_Stop_DMA(&data->htim, data->tim_channel);
+    return 0;
 }
 
-static size_t ws2812_pwm_length(const struct device *dev) {
+static int ws2812_pwm_update_channels(const struct device *dev,
+                                      uint8_t *channels, size_t num_channels) {
+    ws_build_buffer_channels(dev, channels, num_channels);
+    ws_start_dma(dev);
+    return 0;
+}
+
+static unsigned int ws2812_pwm_length(const struct device *dev) {
     const struct ws2812_pwm_cfg *cfg = dev->config;
     return cfg->length;
 }
 
 static DEVICE_API(led_strip, ws2812_pwm_api) = {
-    .update_rgb = ws2812_pwm_update_rgb,
-    .update_channels = ws2812_pwm_update_channels,
     .length = ws2812_pwm_length,
+    .update_channels = ws2812_pwm_update_channels,
+    .update_rgb = ws2812_pwm_update_rgb,
 };
 
-/* ---------------- Init ---------------- */
+static uint32_t get_tim2_input_clk_hz(void) {
+    /* TIM2 is on APB1. When APB1 prescaler > 1, timer clock is PCLK1 * 2. */
+    RCC_ClkInitTypeDef clk = {0};
+    uint32_t flash_latency;
+    HAL_RCC_GetClockConfig(&clk, &flash_latency);
 
-static int ws2812_pwm_init(const struct device *dev) {
+    uint32_t pclk1 = HAL_RCC_GetPCLK1Freq();
+    uint32_t apb1_div = clk.APB1CLKDivider; // RCC_HCLK_DIVx
+    bool apb1_div_greater_than_1 = (apb1_div != RCC_HCLK_DIV1);
+    return apb1_div_greater_than_1 ? (pclk1 * 2U) : pclk1;
+}
+
+static uint32_t ns_to_ticks(uint32_t ns, uint32_t timclk_hz) {
+    /* ticks = round(ns * timclk / 1e9) */
+    uint64_t t =
+        ((uint64_t)ns * (uint64_t)timclk_hz + 500000000ULL) / 1000000000ULL;
+    if (t == 0)
+        t = 1;
+    return (uint32_t)t;
+}
+
+static void ws_compute_timings(const struct device *dev) {
     const struct ws2812_pwm_cfg *cfg = dev->config;
     struct ws2812_pwm_data *data = dev->data;
 
-    if (!pwm_is_ready_dt(&cfg->pwm)) {
-        LOG_ERR("PWM device not ready");
-        return -ENODEV;
-    }
-    if (!device_is_ready(cfg->dma_dev)) {
-        LOG_ERR("DMA device not ready");
-        return -ENODEV;
-    }
-    if (cfg->ccr_addr == 0 || cfg->dier_addr == 0) {
-        LOG_ERR("DT props ccr-addr/dier-addr must be set");
-        return -EINVAL;
-    }
+    uint32_t timclk = get_tim2_input_clk_hz();
 
-    for (uint8_t i = 0; i < cfg->num_colors; i++) {
-        switch (cfg->color_mapping[i]) {
-        case LED_COLOR_ID_WHITE:
-        case LED_COLOR_ID_RED:
-        case LED_COLOR_ID_GREEN:
-        case LED_COLOR_ID_BLUE:
-            break;
-        default:
-            LOG_ERR("%s: invalid color mapping; check color-mapping DT",
-                    dev->name);
-            return -EINVAL;
-        }
-    }
+    /* Period ticks (ARR+1) to hit ~800kHz: */
+    data->ws_period_ticks =
+        (uint32_t)((timclk + (cfg->bit_rate / 2)) / cfg->bit_rate);
+    if (data->ws_period_ticks < 2)
+        data->ws_period_ticks = 2;
 
-    k_sem_init(&data->dma_done, 0, 1);
+    data->ws_t0h_ticks = ns_to_ticks(WS2812_T0H_NS, timclk);
+    data->ws_t1h_ticks = ns_to_ticks(WS2812_T1H_NS, timclk);
 
-    /* Idle low */
-    (void)pwm_set_cycles(cfg->pwm.dev, cfg->pwm.channel, 10, 0, cfg->pwm.flags);
-    return 0;
+    if (data->ws_t0h_ticks >= data->ws_period_ticks)
+        data->ws_t0h_ticks = data->ws_period_ticks - 1;
+    if (data->ws_t1h_ticks >= data->ws_period_ticks)
+        data->ws_t1h_ticks = data->ws_period_ticks - 1;
+
+    /* Reset (latch) slots = time/1.25us: */
+    data->ws_reset_slots =
+        (uint32_t)(((uint64_t)WS2812_RESET_US * 1000ULL + 1249ULL) / 1250ULL);
+    if (data->ws_reset_slots < 64)
+        data->ws_reset_slots = 64; // safe margin
+
+    /* --- (Re)configure TIM2 quickly with computed ARR --- */
+    TIM_HandleTypeDef *htim = (TIM_HandleTypeDef *)&data->htim;
+
+    /* Stop if running */
+    HAL_TIM_PWM_Stop(htim, data->tim_channel);
+
+    /* Base init (no prescaler; we derive exact ARR) */
+    htim->Init.Prescaler = 0;
+    htim->Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim->Init.Period = data->ws_period_ticks - 1; // ARR
+    htim->Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    HAL_TIM_PWM_Init(htim);
+
+    /* PWM CH4 config */
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 0; // start low
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    HAL_TIM_PWM_ConfigChannel(htim, &sConfigOC, data->tim_channel);
+
+    /* Enable PWM output (no DMA yet) */
+    HAL_TIM_PWM_Start(htim, data->tim_channel);
+    HAL_TIM_PWM_Stop(htim, data->tim_channel);
 }
 
-/* ---------------- Instance macros ---------------- */
+static void ws2812_pwm_dma_isr(const void *arg) {
+    struct ws2812_pwm_data *data = (struct ws2812_pwm_data *)arg;
+    if (data->sem_release) {
+        k_sem_give(&data->ws_sem);
+    } else {
+        data->sem_release = true;
+    }
+}
 
-/* If your Zephyr is older and lacks BY_NAME variants, see note below. */
+static int ws2812_pwm_init(const struct device *dev) {
+    struct ws2812_pwm_data *data = dev->data;
+
+    int ret;
+
+    ret = HAL_TIM_PWM_Init((TIM_HandleTypeDef *)&data->htim);
+    if (ret != HAL_OK) {
+        LOG_ERR("TIM init error %d", ret);
+        return -ENODEV;
+    }
+
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    ret = HAL_TIMEx_MasterConfigSynchronization(
+        (TIM_HandleTypeDef *)&data->htim, &sMasterConfig);
+    if (ret != HAL_OK) {
+        LOG_ERR("TIMEx_MasterConfigSync error %d", ret);
+        return -ENODEV;
+    }
+
+    ret = HAL_DMA_Init((DMA_HandleTypeDef *)&data->hdma);
+    if (ret != HAL_OK) {
+        LOG_ERR("DMA init error %d", ret);
+        return -ENODEV;
+    }
+
+    ws_compute_timings(dev);
+
+    k_sem_init(&data->ws_sem, 0, 1);
+
+    if (data->post_init) {
+        data->post_init();
+    }
+
+    return 0;
+}
 
 #define WS2812_COLOR_MAPPING(idx)                                              \
     static const uint8_t ws2812_pwm_##idx##_color_mapping[] =                  \
         DT_INST_PROP(idx, color_mapping)
 
-#define WS2812_DMA_CTLR(idx)                                                   \
-    DEVICE_DT_GET(DT_DMAS_CTLR_BY_NAME(DT_DRV_INST(idx), tx))
-#define WS2812_DMA_CH(idx) DT_DMAS_CELL_BY_NAME(DT_DRV_INST(idx), tx, channel)
-#define WS2812_DMA_SLOT(idx) DT_DMAS_CELL_BY_NAME(DT_DRV_INST(idx), tx, slot)
+#define WS2812_DMA_BUFFER(idx, led_count)                                      \
+    static uint32_t ws2812_pwm_##idx##_dma_buffer[led_count * 24 + 256]
+
+#define WS2812_POST_INIT_FN(idx) static void ws2812_pwm_##idx##_post_init(void)
+
+#define WS2812_POST_INIT_FN_DECL(idx)                                          \
+    WS2812_POST_INIT_FN(idx) {                                                 \
+        IRQ_CONNECT(DT_INST_PROP(idx, st_dma_chan_irqn), 0,                    \
+                    ws2812_pwm_dma_isr, &ws2812_pwm_##idx##_data, 0);          \
+    }
 
 #define WS2812_PWM_DEFINE(idx)                                                 \
     WS2812_COLOR_MAPPING(idx);                                                 \
-    static struct ws2812_pwm_data ws2812_pwm_##idx##_data;                     \
+    WS2812_DMA_BUFFER(idx, DT_INST_PROP(idx, chain_length));                   \
+    WS2812_POST_INIT_FN(idx);                                                  \
+    static struct ws2812_pwm_data ws2812_pwm_##idx##_data = {                  \
+        .dma_buff = ws2812_pwm_##idx##_dma_buffer,                             \
+        .tim_channel = DT_INST_PROP(idx, st_tim_channel),                      \
+        .post_init = ws2812_pwm_##idx##_post_init,                             \
+        .hdma =                                                                \
+            {                                                                  \
+                .Instance = (DMA_Channel_TypeDef *)DT_INST_PROP(               \
+                    idx, st_dma_chan_inst),                                    \
+                .Init =                                                        \
+                    {                                                          \
+                        .Request = DT_INST_PROP(idx, st_dma_req),              \
+                        .Direction = DMA_MEMORY_TO_PERIPH,                     \
+                        .PeriphInc = DMA_PINC_DISABLE,                         \
+                        .MemInc = DMA_MINC_ENABLE,                             \
+                        .PeriphDataAlignment = DMA_PDATAALIGN_WORD,            \
+                        .MemDataAlignment = DMA_MDATAALIGN_WORD,               \
+                        .Mode = DMA_NORMAL,                                    \
+                        .Priority = DMA_PRIORITY_MEDIUM,                       \
+                    },                                                         \
+                .Parent = (TIM_HandleTypeDef *)&ws2812_pwm_##idx##_data.htim,  \
+            },                                                                 \
+        .htim =                                                                \
+            {                                                                  \
+                .Instance = (TIM_TypeDef *)DT_INST_PROP(idx, st_tim_base),     \
+                .Init =                                                        \
+                    {                                                          \
+                        .Prescaler = 0,                                        \
+                        .Period = 4294967295,                                  \
+                        .CounterMode = TIM_COUNTERMODE_UP,                     \
+                        .ClockDivision = TIM_CLOCKDIVISION_DIV1,               \
+                        .AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE,   \
+                    },                                                         \
+                .hdma[DT_INST_PROP(idx, st_tim_dma_id)] =                      \
+                    (DMA_HandleTypeDef *)&ws2812_pwm_##idx##_data.hdma,        \
+            },                                                                 \
+    };                                                                         \
+    WS2812_POST_INIT_FN_DECL(idx)                                              \
     static const struct ws2812_pwm_cfg ws2812_pwm_##idx##_cfg = {              \
-        .pwm = PWM_DT_SPEC_GET(DT_DRV_INST(idx)),                              \
-        .dma_dev = WS2812_DMA_CTLR(idx),                                       \
-        .dma_channel = WS2812_DMA_CH(idx),                                     \
-        .dma_slot = WS2812_DMA_SLOT(idx),                                      \
-        .ccr_addr = DT_INST_PROP(idx, ccr_addr),                               \
-        .dier_addr = DT_INST_PROP(idx, dier_addr),                             \
-        .dier_bit = DT_INST_PROP(idx, dier_bit),                               \
         .color_mapping = ws2812_pwm_##idx##_color_mapping,                     \
+        .dma_chan_irqn = DT_INST_PROP(idx, st_dma_chan_irqn),                  \
         .length = DT_INST_PROP(idx, chain_length),                             \
+        .bit_rate = DT_INST_PROP(idx, bit_rate),                               \
         .num_colors = DT_INST_PROP_LEN(idx, color_mapping),                    \
+        .dma_seq_len_max = DT_INST_PROP(idx, chain_length) * 24 + 256,         \
     };                                                                         \
     DEVICE_DT_INST_DEFINE(idx, ws2812_pwm_init, NULL,                          \
                           &ws2812_pwm_##idx##_data, &ws2812_pwm_##idx##_cfg,   \
@@ -319,11 +378,3 @@ static int ws2812_pwm_init(const struct device *dev) {
                           &ws2812_pwm_api);
 
 DT_INST_FOREACH_STATUS_OKAY(WS2812_PWM_DEFINE)
-
-/* ---- If your tree doesn't have the BY_NAME macros: -----------------------
- * Replace the three WS2812_DMA_* defines above with the indexed forms:
- *
- * #define WS2812_DMA_CTLR(idx)  DEVICE_DT_GET(DT_DMAS_CTLR(DT_DRV_INST(idx),
- * 0)) #define WS2812_DMA_CH(idx)    DT_DMAS_CELL(DT_DRV_INST(idx), 0, channel)
- * #define WS2812_DMA_SLOT(idx)  DT_DMAS_CELL(DT_DRV_INST(idx), 0, slot)
- * ------------------------------------------------------------------------ */

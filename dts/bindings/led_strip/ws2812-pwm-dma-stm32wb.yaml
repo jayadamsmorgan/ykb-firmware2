@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+description: WS2812 via STM32 HAL (PWM + DMA), STM32WB only
+
+compatible: "ws2812-pwm-dma-stm32wb"
+
+include: [base.yaml, ws2812.yaml]
+
+properties:
+  st,tim-base:
+    type: int
+    required: true
+    description: Absolute base address of TIM instance (e.g., TIM2 base).
+
+  st,tim-channel:
+    type: int
+    required: true
+    description: |
+      HAL TIM channel number (1..4). Will be mapped to TIM_CHANNEL_x.
+
+  st,dma-chan-inst:
+    type: int
+    required: true
+    description: |
+      Absolute address of DMA channel instance (e.g., (uint32_t)DMA1_Channel5).
+
+  st,dma-chan-irqn:
+    type: int
+    required: true
+
+  st,dma-req:
+    type: int
+    required: true
+  
+  st,tim-dma-id:
+    type: int
+    required: true
+
+  bit-rate:
+    type: int
+    required: true
