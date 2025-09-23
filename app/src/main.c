@@ -98,6 +98,12 @@ int main(void) {
         pixels[2] = pixels[3];
         pixels[3] = pixels[4];
         pixels[4] = tmp;
+
+        if (bt_connect_is_ready()) {
+            bt_connect_send((uint8_t[]){0, 0, 0x04, 0, 0, 0, 0, 0});
+            k_sleep(K_MSEC(10000));
+            bt_connect_send((uint8_t[]){0, 0, 0, 0, 0, 0, 0, 0});
+        }
     }
 
     // uint8_t buffer[8] = {0};

@@ -155,8 +155,8 @@ int kb_settings_init() {
     if (res)
         kb_settings_load_default();
 
-    if (res > 0) // Stored settings either corrupt or empty
-        SETTINGS_SAVE();
+    // if (res > 0) // Stored settings either corrupt or empty
+    //     SETTINGS_SAVE();
 
     return 0;
 }

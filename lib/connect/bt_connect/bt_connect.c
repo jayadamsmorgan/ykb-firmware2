@@ -49,9 +49,9 @@ static const struct bt_data ad[] = {
 #define SAMPLE_BT_PERM_WRITE BT_GATT_PERM_WRITE_ENCRYPT
 
 #if CONFIG_YKB_LEFT
-#define CONFIG_BT_DEVICE_NAME_FULL CONFIG_BT_DEVICE_NAME " (Left)"
+#define CONFIG_BT_DEVICE_NAME_FULL CONFIG_BT_DEVICE_NAME " Left"
 #elif CONFIG_YKB_RIGHT
-#define CONFIG_BT_DEVICE_NAME_FULL CONFIG_BT_DEVICE_NAME " (Right)"
+#define CONFIG_BT_DEVICE_NAME_FULL CONFIG_BT_DEVICE_NAME " Right"
 #endif // CONFIG_YKB_LEFT || CONFIG_YKB_RIGHT
 
 static const struct bt_data sd[] = {
@@ -59,7 +59,7 @@ static const struct bt_data sd[] = {
             sizeof(CONFIG_BT_DEVICE_NAME_FULL) - 1),
 };
 
-static bool kb_ready = false;
+static struct k_sem kb_ready;
 
 static const uint8_t report_map[] = HID_KEYBOARD_REPORT_DESC();
 // static uint8_t report_map[] = {
@@ -195,8 +195,9 @@ static void connected(struct bt_conn *conn, uint8_t err) {
         return;
     }
 
-    kb_ready = true;
-    LOG_INF("Connected %s", addr);
+    k_sem_give(&kb_ready);
+
+    LOG_INF("Connected to %s", addr);
 
     if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
         LOG_ERR("Failed to set security");
@@ -208,7 +209,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
 
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-    kb_ready = false;
+    k_sem_reset(&kb_ready);
 
     LOG_ERR("Disconnected from %s, reason 0x%02x %s", addr, reason,
             bt_hci_err_to_str(reason));
@@ -276,6 +277,10 @@ int bt_connect_init() {
         return -1;
     }
 
+    k_sem_init(&kb_ready, 0, 1);
+
+    k_sem_reset(&kb_ready);
+
     return 0;
 }
 
@@ -301,5 +306,8 @@ void bt_connect_send(uint8_t buffer[BT_CONNECT_HID_REPORT_COUNT]) {
 }
 
 bool bt_connect_is_ready() {
-    return kb_ready;
+    if (k_sem_take(&kb_ready, K_MSEC(1))) {
+        return false;
+    }
+    return true;
 }

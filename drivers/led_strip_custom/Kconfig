@@ -1,0 +1,22 @@
+config LED_STRIP_CUSTOM
+    bool "Enable custom drivers for addressable LED strips"
+
+if LED_STRIP_CUSTOM
+
+    rsource "Kconfig.pwm_dma_stm32wb"
+
+    if !LED_STRIP
+        # Everything below is needed to remove warning and errors
+        # when LED_STRIP=n since we are extending LED_STRIP
+        module = LED_STRIP
+        module-str = led_strip
+        source "subsys/logging/Kconfig.template.log_config"
+
+        config LED_STRIP_INIT_PRIORITY
+            int "LED strip initialization priority"
+            default 90
+            help
+              System initialization priority for LED strip drivers.
+    endif # LED_STRIP
+
+endif # LED_STRIP_CUSTOM

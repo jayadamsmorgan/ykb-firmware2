@@ -18,7 +18,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
-LOG_MODULE_REGISTER(ws2812_pwm_dma_stm32, CONFIG_LED_STRIP_LOG_LEVEL);
+LOG_MODULE_REGISTER(ws2812_pwm_dma_stm32wb, CONFIG_LED_STRIP_LOG_LEVEL);
 
 #define WS2812_T0H_NS 350U
 #define WS2812_T1H_NS 700U

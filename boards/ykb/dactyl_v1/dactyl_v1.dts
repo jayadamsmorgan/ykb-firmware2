@@ -16,6 +16,7 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 		zephyr,code-partition = &slot0_partition;
+        zephyr,settings-partition = &storage_partition;
 	};
 
     mux1: mux1 {
@@ -125,7 +126,7 @@
         compatible = "zephyr,emu-eeprom";
         size = <DT_SIZE_K(3)>;
         pagesize = <DT_SIZE_K(4)>;
-        partition = <&storage_partition>;
+        partition = <&eeprom_partition>;
         rambuf;
         partition-erase;
     };
@@ -305,11 +306,16 @@ zephyr_udc0: &usb {
 
 		scratch_partition: partition@d4000 {
 			label = "image-scratch";
-			reg = <0x000d4000 DT_SIZE_K(16)>;
+			reg = <0x000d4000 DT_SIZE_K(8)>;
 		};
 
-		storage_partition: partition@d8000 {
-			label = "storage";
+        storage_partition: partition@d6000 {
+            label = "storage";
+            reg = <0x000d6000 DT_SIZE_K(8)>;
+        };
+
+		eeprom_partition: partition@d8000 {
+			label = "eeprom";
 			reg = <0x000d8000 DT_SIZE_K(8)>;
 		};
 	};

@@ -4,4 +4,4 @@ add_subdirectory_ifdef(CONFIG_KSCAN kscan)
 
 add_subdirectory_ifdef(CONFIG_MUX mux)
 
-add_subdirectory_ifdef(CONFIG_LED_STRIP led_strip)
+add_subdirectory_ifdef(CONFIG_LED_STRIP_CUSTOM led_strip_custom)

@@ -3,5 +3,5 @@
 menu "Drivers"
     rsource "kscan/Kconfig"
     rsource "mux/Kconfig"
-    rsource "led_strip/Kconfig"
+    rsource "led_strip_custom/Kconfig"
 endmenu

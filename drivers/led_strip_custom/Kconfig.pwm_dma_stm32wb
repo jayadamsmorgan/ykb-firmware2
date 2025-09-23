@@ -1,0 +1,11 @@
+config WS2812_STRIP_PWM_DMA_STM32WB
+    bool "WS2812 LED strip PWM + DMA driver for STM32WB"
+    depends on SOC_SERIES_STM32WBX
+    depends on DT_HAS_WS2812_PWM_DMA_STM32WB_ENABLED
+    default y
+    select USE_STM32_HAL_TIM
+    select USE_STM32_HAL_TIM_EX
+    select USE_STM32_HAL_DMA
+    select SHARED_INTERRUPTS
+    help
+      Enable driver for WS2812 (and compatibles) LED strip using PWM and DMA on STM32WB series devices.
