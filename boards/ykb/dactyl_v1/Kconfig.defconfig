@@ -1,7 +1,7 @@
 if BOARD_DACTYL_V1
 
-config BT_STM32_IPM
-	default y
-	depends on BT
+    config BT_STM32_IPM
+        default y
+        depends on BT
 
-endif
+endif # BOARD_DACTYL_V1

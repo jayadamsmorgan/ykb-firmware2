@@ -14,4 +14,8 @@ void bt_connect_send(uint8_t buffer[BT_CONNECT_HID_REPORT_COUNT]);
 
 bool bt_connect_is_ready();
 
+void bt_connect_start_advertising();
+
+void bt_connect_factory_reset();
+
 #endif // LIB_BT_CONNECT_H_

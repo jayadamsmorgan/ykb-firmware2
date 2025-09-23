@@ -85,26 +85,20 @@ int main(void) {
                     kb_thread, NULL, NULL, NULL, KB_THREAD_PRIO, 0, K_NO_WAIT);
     k_thread_name_set(&kb_thread_data, "kb_thread");
 
-    while (true) {
-        LOG_DBG("Update");
-        ret = led_strip_update_rgb(strip, pixels, 5);
-        if (ret) {
-            LOG_ERR("Strip update err %d", ret);
-        }
-        k_sleep(K_SECONDS(1));
-        struct led_rgb tmp = pixels[0];
-        pixels[0] = pixels[1];
-        pixels[1] = pixels[2];
-        pixels[2] = pixels[3];
-        pixels[3] = pixels[4];
-        pixels[4] = tmp;
-
-        if (bt_connect_is_ready()) {
-            bt_connect_send((uint8_t[]){0, 0, 0x04, 0, 0, 0, 0, 0});
-            k_sleep(K_MSEC(10000));
-            bt_connect_send((uint8_t[]){0, 0, 0, 0, 0, 0, 0, 0});
-        }
-    }
+    // while (true) {
+    //     LOG_DBG("Update");
+    //     ret = led_strip_update_rgb(strip, pixels, 5);
+    //     if (ret) {
+    //         LOG_ERR("Strip update err %d", ret);
+    //     }
+    //     k_sleep(K_SECONDS(1));
+    //     struct led_rgb tmp = pixels[0];
+    //     pixels[0] = pixels[1];
+    //     pixels[1] = pixels[2];
+    //     pixels[2] = pixels[3];
+    //     pixels[3] = pixels[4];
+    //     pixels[4] = tmp;
+    // }
 
     // uint8_t buffer[8] = {0};
     // buffer[2] = 0x18;

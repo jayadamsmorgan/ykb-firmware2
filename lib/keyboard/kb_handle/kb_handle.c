@@ -55,6 +55,17 @@ static void on_press(uint16_t key_index, kb_settings_t *settings) {
 
         if (fn_pressed) {
 
+#if CONFIG_LIB_BT_CONNECT
+            if (code == KEY_MINUS_UNDERSCORE) {
+                bt_connect_factory_reset();
+                return;
+            }
+            if (code == KEY_BACKSLASH_VERTICALBAR) {
+                bt_connect_start_advertising();
+                return;
+            }
+#endif // CONFIG_LIB_BT_CONNECT
+
         } else if (layer_select && code >= KEY_1_EXCLAMATION &&
                    code <= KEY_0_RPAREN) {
             uint8_t layer_index = code - KEY_1_EXCLAMATION;
