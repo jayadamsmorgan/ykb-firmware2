@@ -3,3 +3,5 @@
 add_subdirectory(connect)
 
 add_subdirectory(keyboard)
+
+add_subdirectory(led)

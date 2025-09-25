@@ -4,6 +4,7 @@ menu "Libraries"
 
     rsource "connect/Kconfig"
     rsource "keyboard/Kconfig"
+    rsource "led/Kconfig"
 
 endmenu
 

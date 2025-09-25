@@ -1,0 +1,34 @@
+menuconfig KB_BACKLIGHT
+    bool "Backlight driver"
+    depends on LED || LED_STRIP || LED_STRIP_CUSTOM
+    help
+     This option enables backlight support for YKB keyboards.
+
+if KB_BACKLIGHT
+
+    choice KB_BACKLIGHT_DEVICE
+        bool "Backlight device (LED or LED strip)"
+    
+        config KB_BACKLIGHT_DEVICE_LED
+            bool "Backlight device RGB LED used"
+            depends on LED
+        
+        config KB_BACKLIGHT_DEVICE_LED_STRIP
+            bool "Backlight device ARGB LED strip used"
+            depends on LED_STRIP || LED_STRIP_CUSTOM
+
+    endchoice
+       
+    module = KB_BACKLIGHT
+    module-str = kb_backlight
+    source "subsys/logging/Kconfig.template.log_config"
+
+    if KB_BACKLIGHT_DEVICE_LED
+        rsource "Kconfig.led"
+    endif # BACKLIGHT_DEVICE_LED
+
+    if KB_BACKLIGHT_DEVICE_LED_STRIP
+        rsource "Kconfig.led_strip"
+    endif # BACKLIGHT_DEVICE_LED_STRIP
+
+endif # BACKLIGHT

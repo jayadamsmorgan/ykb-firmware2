@@ -4,4 +4,36 @@ if BOARD_DACTYL_V1
         default y
         depends on BT
 
+    if YKB_RIGHT
+
+        config YKB_USBD_PRODUCT
+            default "YKB Dactyl V1 (Right)"
+            depends on LIB_USB_CONNECT
+
+        config YKB_USBD_PID
+            default 0x0001
+            depends on LIB_USB_CONNECT
+
+        config BT_DEVICE_NAME
+            default "YKB Dactyl V1 (Right)"
+            depends on LIB_BT_CONNECT
+
+    endif # YKB_RIGHT
+
+    if YKB_LEFT
+
+        config YKB_USBD_PRODUCT
+            default "YKB Dactyl V1 (Left)"
+            depends on LIB_USB_CONNECT
+
+        config YKB_USBD_PID
+            default 0x0002
+            depends on LIB_USB_CONNECT
+
+        config BT_DEVICE_NAME
+            default "YKB Dactyl V1 (Left)"
+            depends on LIB_BT_CONNECT
+
+    endif # YKB_LEFT
+
 endif # BOARD_DACTYL_V1

@@ -65,12 +65,6 @@ BT_GATT_SERVICE_DEFINE(
 #define SAMPLE_BT_PERM_READ BT_GATT_PERM_READ_ENCRYPT
 #define SAMPLE_BT_PERM_WRITE BT_GATT_PERM_WRITE_ENCRYPT
 
-#if CONFIG_YKB_LEFT
-#define CONFIG_BT_DEVICE_NAME_FULL CONFIG_BT_DEVICE_NAME " (Left)"
-#elif CONFIG_YKB_RIGHT
-#define CONFIG_BT_DEVICE_NAME_FULL CONFIG_BT_DEVICE_NAME " (Right)"
-#endif // CONFIG_YKB_LEFT || CONFIG_YKB_RIGHT
-
 static atomic_bool kb_ready = false;
 
 static const uint8_t report_map[] = HID_KEYBOARD_REPORT_DESC();
@@ -135,7 +129,7 @@ static void connected(struct bt_conn *conn, uint8_t err) {
 
     LOG_INF("Connected to %s", addr);
 
-    if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
+    if (bt_conn_set_security(conn, BT_SECURITY_L2 | BT_SECURITY_FORCE_PAIR)) {
         LOG_ERR("Failed to set security");
     }
 }
@@ -183,7 +177,7 @@ static void bt_ready(int err) {
         settings_load();
     }
 
-    bt_set_name(CONFIG_BT_DEVICE_NAME_FULL);
+    bt_connect_start_advertising();
 }
 
 #if CONFIG_BT_INTER_KB_COMM
@@ -199,23 +193,28 @@ static void bt_ready(int err) {
 
 static void pairing_failed_cb(struct bt_conn *conn,
                               enum bt_security_err reason) {
-    if (reason == BT_SECURITY_ERR_PIN_OR_KEY_MISSING) {
+    char addr[BT_ADDR_LE_STR_LEN];
+
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+    if (reason == BT_SECURITY_ERR_UNSPECIFIED) {
         bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
-        LOG_WRN("Pairing failed (key missing). Cleared local bond to retry.");
+        LOG_WRN("Pairing failed. Cleared local bond to retry.");
     }
 }
 
-static void security_changed_cb(struct bt_conn *conn, bt_security_t security,
-                                enum bt_security_err error) {
-    LOG_INF("BT SEC ERR %d", error);
-}
+static void bond_deleted_cb(uint8_t id, const bt_addr_le_t *peer) {
+    char addr[BT_ADDR_LE_STR_LEN];
 
-static struct bt_conn_cb conn_cbs = {
-    .security_changed = security_changed_cb,
-};
+    bt_addr_le_to_str(peer, addr, sizeof(addr));
+
+    LOG_DBG("BOND DEL CB: id %d, addr %s", id, addr);
+
+    bt_unpair(id, peer);
+}
 
 static struct bt_conn_auth_info_cb auth_info_cbs = {
     .pairing_failed = pairing_failed_cb,
+    .bond_deleted = bond_deleted_cb,
 };
 
 int bt_connect_init() {
@@ -232,16 +231,10 @@ int bt_connect_init() {
         return -2;
     }
 
-    ret = bt_conn_cb_register(&conn_cbs);
-    if (ret) {
-        LOG_ERR("Unable to register bt_conn_cbs (err %d)", ret);
-        return -3;
-    }
-
     return 0;
 }
 
-static const struct bt_le_adv_param adv_param[] = BT_LE_ADV_PARAM(
+static const struct bt_le_adv_param *adv_param = BT_LE_ADV_PARAM(
     BT_LE_ADV_OPT_CONN | BT_LE_ADV_OPT_USE_IDENTITY |
         BT_LE_ADV_OPT_USE_TX_POWER, // use the identity address (not RPA)
     BT_GAP_ADV_FAST_INT_MIN_1, BT_GAP_ADV_FAST_INT_MAX_1,
@@ -277,11 +270,6 @@ void bt_connect_factory_reset() {
         LOG_ERR("unpair failed: %d", err);
         return;
     }
-
-    settings_delete("bt");
-    settings_save();
-
-    LOG_INF("Factory reset done");
 }
 
 BT_GATT_SERVICE_DEFINE(

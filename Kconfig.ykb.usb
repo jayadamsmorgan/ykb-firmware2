@@ -22,7 +22,7 @@ if YKB_USB_ENABLED
         help
             USB device product string.
 
-    config YKB_USBD_PID_LEFT
+    config YKB_USBD_PID
         hex "USB device Product ID (Left)"
         help
             USB device Product ID for left keyboard. The right keyboard Product ID would be `LEFT_ID + 1`.
