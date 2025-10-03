@@ -14,6 +14,10 @@ menu "Keyboard handling"
 
     endchoice
 
+    config KB_FN_KEYSTROKE_MAX_KEYS
+        int "Maximum amount of keys allowed for FN-based keystrokes"
+        default 3
+
     module = KB_HANDLE
     module-str = kb_handle
     source "subsys/logging/Kconfig.template.log_config"

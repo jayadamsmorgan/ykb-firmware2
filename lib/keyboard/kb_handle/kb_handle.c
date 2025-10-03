@@ -11,6 +11,13 @@
 #include <lib/keyboard/kb_keys.h>
 #include <lib/keyboard/kb_settings.h>
 
+// clang-format off
+#define KB_EXPAND(x) x
+#define KB_CONCAT(n1, n2, n3) <KB_EXPAND(n1)KB_EXPAND(n2)KB_EXPAND(n3)>
+// Include the right keystrokes based on the board
+#include KB_CONCAT(lib/keyboard/keystrokes/,CONFIG_BOARD,.h)
+// clang-format on
+
 #include <string.h>
 
 LOG_MODULE_REGISTER(kb_handle, CONFIG_KB_HANDLE_LOG_LEVEL);
@@ -33,6 +40,9 @@ static const uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
 bool layer_select = false;
 bool fn_pressed = false;
 
+uint8_t fn_buff[CONFIG_KB_FN_KEYSTROKE_MAX_KEYS] = {0};
+uint8_t fn_buff_size = 0;
+
 static inline void for_each_set_bit(uint32_t word, uint16_t base,
                                     void (*fn)(uint16_t idx,
                                                kb_settings_t *settings),
@@ -52,20 +62,8 @@ static void on_press(uint16_t key_index, kb_settings_t *settings) {
     LOG_DBG("Key with index %d and HID code 0x%X pressed", key_index, code);
 
     if (code < KEY_FN) {
-
-        if (fn_pressed) {
-
-#if CONFIG_LIB_BT_CONNECT
-            if (code == KEY_MINUS_UNDERSCORE) {
-                bt_connect_factory_reset();
-                return;
-            }
-            if (code == KEY_BACKSLASH_VERTICALBAR) {
-                bt_connect_start_advertising();
-                return;
-            }
-#endif // CONFIG_LIB_BT_CONNECT
-
+        if (fn_pressed && fn_buff_size < CONFIG_KB_FN_KEYSTROKE_MAX_KEYS) {
+            fn_buff[fn_buff_size++] = code;
         } else if (layer_select && code >= KEY_1_EXCLAMATION &&
                    code <= KEY_0_RPAREN) {
             uint8_t layer_index = code - KEY_1_EXCLAMATION;
@@ -122,8 +120,37 @@ static void on_release(uint16_t key_index, kb_settings_t *settings) {
         layer_select = false;
     } else if (code == KEY_FN) {
         fn_pressed = false;
+        fn_buff_size = 0;
+    } else if (fn_pressed && fn_buff_size > 0) {
+        uint8_t i = 0;
+        for (i = 0; i < fn_buff_size; ++i) {
+            if (fn_buff[i] == code) {
+                fn_buff[i] = 0;
+                break;
+            }
+        }
+        for (uint8_t j = i + 1; j < fn_buff_size; ++j) {
+            fn_buff[j - 1] = fn_buff[j];
+        }
+        fn_buff_size--;
     }
-    // Edge-triggered release behaviors if you need them (tap dance, etc.)
+}
+
+static void process_fn_buff() {
+    if (fn_buff_size == 0)
+        return;
+
+    STRUCT_SECTION_FOREACH(kb_fn_keystroke, keystroke) {
+
+        if (keystroke->count != fn_buff_size)
+            continue;
+
+        if (strncmp(keystroke->keys, fn_buff, fn_buff_size) == 0) {
+            LOG_DBG("Found matching keystroke %s", keystroke->name);
+            if (keystroke->cb)
+                keystroke->cb();
+        }
+    }
 }
 
 static inline void bm_set(uint32_t *bm, uint16_t idx) {
@@ -210,6 +237,7 @@ void kb_handle() {
     memcpy(prev_down, curr_down, sizeof(prev_down));
 
     if (fn_pressed) {
+        process_fn_buff();
         return;
     }
 
@@ -218,18 +246,18 @@ void kb_handle() {
         usb_connect_handle_wakeup();
         usb_connect_send(report);
     } else if (bt_connect_is_ready()) {
-        bt_connect_send(report);
+        bt_connect_send(report, report_size);
     }
 #elif CONFIG_KB_HANDLE_REPORT_PRIO_BT
     if (bt_connect_is_ready()) {
-        bt_connect_send(report);
+        bt_connect_send(report, report_size);
     } else if (usb_connect_is_ready()) {
         usb_connect_handle_wakeup();
         usb_connect_send(report);
     }
 #elif CONFIG_LIB_BT_CONNECT
     if (bt_connect_is_ready()) {
-        bt_connect_send(report);
+        bt_connect_send(report, report_size);
     }
 #elif CONFIG_LIB_USB_CONNECT
     if (usb_connect_is_ready()) {

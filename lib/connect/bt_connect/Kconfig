@@ -16,17 +16,27 @@ if LIB_BT_CONNECT
 
     if BT_INTER_KB_COMM
 
+        config BT_INTER_KB_COMM_MASTER
+            bool
+
+        config BT_INTER_KB_COMM_SLAVE
+            bool
+
         choice BT_CONNECT_MASTER
             bool "Inter-keyboard communication master"
-            default BT_CONNECT_MASTER_RIGHT
+            default BT_CONNECT_MASTER_LEFT
             help
               Keyboard half considered to be master in
               inter-keyboard communication
 
             config BT_CONNECT_MASTER_LEFT
+                select BT_INTER_KB_COMM_MASTER if YKB_LEFT
+                select BT_INTER_KB_COMM_SLAVE if YKB_RIGHT
                 bool "Left"
 
             config BT_CONNECT_MASTER_RIGHT
+                select BT_INTER_KB_COMM_MASTER if YKB_RIGHT
+                select BT_INTER_KB_COMM_SLAVE if YKB_LEFT
                 bool "Right"
 
         endchoice
