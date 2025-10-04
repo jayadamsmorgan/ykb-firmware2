@@ -53,23 +53,23 @@
         map = <22>;
     };
 
-    // led_strip: led_strip {
-    //     compatible = "ws2812-pwm-dma-stm32wb";
-    //
-    //     chain-length = <22>;
-    //     color-mapping = <LED_COLOR_ID_GREEN
-    //                      LED_COLOR_ID_RED
-    //                      LED_COLOR_ID_BLUE>;
-    //
-    //     bit-rate = <800000>; // 800Khz
-    //
-    //     st,tim-base      = <0x40000000>;  // TIM2 base
-    //     st,tim-channel   = <12>;          // TIM_CHANNEL_4
-    //     st,dma-chan-inst = <0x40020008>;  // DMA1_Channel1 base
-    //     st,dma-req       = <31>;          // TIM2_CH4_REQ
-    //     st,dma-chan-irqn = <11>;          // DMA1_Channel1_IRQn
-    //     st,tim-dma-id    = <4>;           // TIM_DMA_ID_CC4
-    // };
+    led_strip: led_strip {
+        compatible = "ws2812-pwm-dma-stm32wb";
+
+        chain-length = <22>;
+        color-mapping = <LED_COLOR_ID_GREEN
+                         LED_COLOR_ID_RED
+                         LED_COLOR_ID_BLUE>;
+
+        bit-rate = <800000>; // 800Khz
+
+        st,tim-base      = <0x40000000>;  // TIM2 base
+        st,tim-channel   = <0>;           // TIM_CHANNEL_1
+        st,dma-chan-inst = <0x40020008>;  // DMA1_Channel1 base
+        st,dma-req       = <28>;          // TIM2_CH1_REQ
+        st,dma-chan-irqn = <11>;          // DMA1_Channel1_IRQn
+        st,tim-dma-id    = <1>;           // TIM_DMA_ID_CC1
+    };
 
 	hid_dev_0: hid_dev_0 {
 		compatible = "zephyr,hid-device";
