@@ -67,38 +67,54 @@ int main(void) {
     }
     LOG_DBG("KBSettings is ready!");
 
-    // const struct device *strip = DEVICE_DT_GET(DT_NODELABEL(led_strip));
-    // if (!strip || !device_is_ready(strip)) {
-    //     LOG_ERR("Strip device not ready");
-    // }
-    // LOG_DBG("Strip ready");
-    //
-    // struct led_rgb pixels[] = {
-    //     (struct led_rgb){.r = 0, .g = 100, .b = 0},
-    //     (struct led_rgb){.r = 100, .g = 0, .b = 0},
-    //     (struct led_rgb){.r = 0, .g = 0, .b = 100},
-    //     (struct led_rgb){.r = 0, .g = 50, .b = 50},
-    //     (struct led_rgb){.r = 50, .g = 50, .b = 0},
-    // };
+    const struct device *strip = DEVICE_DT_GET(DT_NODELABEL(led_strip));
+    if (!strip || !device_is_ready(strip)) {
+        LOG_ERR("Strip device not ready");
+    }
+    LOG_DBG("Strip ready");
+
+    struct led_rgb pixels[22] = {
+        (struct led_rgb){.r = 0, .g = 100, .b = 0},
+        (struct led_rgb){.r = 100, .g = 0, .b = 0},
+        (struct led_rgb){.r = 0, .g = 0, .b = 100},
+        (struct led_rgb){.r = 0, .g = 50, .b = 50},
+        (struct led_rgb){.r = 50, .g = 50, .b = 0},
+        (struct led_rgb){.r = 50, .g = 0, .b = 50},
+        (struct led_rgb){.r = 0, .g = 100, .b = 0},
+        (struct led_rgb){.r = 100, .g = 0, .b = 0},
+        (struct led_rgb){.r = 0, .g = 0, .b = 100},
+        (struct led_rgb){.r = 0, .g = 50, .b = 50},
+        (struct led_rgb){.r = 50, .g = 50, .b = 0},
+        (struct led_rgb){.r = 50, .g = 0, .b = 50},
+        (struct led_rgb){.r = 0, .g = 100, .b = 0},
+        (struct led_rgb){.r = 100, .g = 0, .b = 0},
+        (struct led_rgb){.r = 0, .g = 0, .b = 100},
+        (struct led_rgb){.r = 0, .g = 50, .b = 50},
+        (struct led_rgb){.r = 50, .g = 50, .b = 0},
+        (struct led_rgb){.r = 50, .g = 0, .b = 50},
+        (struct led_rgb){.r = 0, .g = 100, .b = 0},
+        (struct led_rgb){.r = 100, .g = 0, .b = 0},
+        (struct led_rgb){.r = 0, .g = 0, .b = 100},
+        (struct led_rgb){.r = 0, .g = 50, .b = 50},
+    };
 
     k_thread_create(&kb_thread_data, kb_thread_stack, KB_THREAD_STACK_SIZE,
                     kb_thread, NULL, NULL, NULL, KB_THREAD_PRIO, 0, K_NO_WAIT);
     k_thread_name_set(&kb_thread_data, "kb_thread");
 
-    // while (true) {
-    //     LOG_DBG("Update");
-    //     ret = led_strip_update_rgb(strip, pixels, 5);
-    //     if (ret) {
-    //         LOG_ERR("Strip update err %d", ret);
-    //     }
-    //     k_sleep(K_SECONDS(1));
-    //     struct led_rgb tmp = pixels[0];
-    //     pixels[0] = pixels[1];
-    //     pixels[1] = pixels[2];
-    //     pixels[2] = pixels[3];
-    //     pixels[3] = pixels[4];
-    //     pixels[4] = tmp;
-    // }
+    while (true) {
+        LOG_DBG("Update");
+        ret = led_strip_update_rgb(strip, pixels, 22);
+        if (ret) {
+            LOG_ERR("Strip update err %d", ret);
+        }
+        k_sleep(K_SECONDS(1));
+        struct led_rgb tmp = pixels[0];
+        for (size_t i = 0; i < 21; ++i) {
+            pixels[i] = pixels[i + 1];
+        }
+        pixels[21] = tmp;
+    }
 
     // uint8_t buffer[8] = {0};
     // buffer[2] = 0x18;
