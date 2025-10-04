@@ -18,85 +18,58 @@
 		zephyr,code-partition = &slot0_partition;
         zephyr,settings-partition = &storage_partition;
 
-        ykb,backlight = &led_strip;
+        // ykb,backlight = &led_strip;
 	};
-
-    mux1: mux1 {
-        compatible = "mux-gpio";
-        sel-gpios = <&gpiob 7 GPIO_ACTIVE_HIGH>,
-                    <&gpiob 6 GPIO_ACTIVE_HIGH>,
-                    <&gpiob 5 GPIO_ACTIVE_HIGH>,
-                    <&gpiob 4 GPIO_ACTIVE_HIGH>;
-        channels = <11>;
-        #mux-cells = <0>;
-    };
-
-    mux2: mux2 {
-        compatible = "mux-gpio";
-        sel-gpios = <&gpiod 0 GPIO_ACTIVE_HIGH>,
-                    <&gpioc 12 GPIO_ACTIVE_HIGH>,
-                    <&gpioc 11 GPIO_ACTIVE_HIGH>,
-                    <&gpioc 10 GPIO_ACTIVE_HIGH>;
-        channels = <15>;
-        #mux-cells = <0>;
-    };
-
-    mux3: mux3 {
-        compatible = "mux-gpio";
-        sel-gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>,
-                    <&gpiob 14 GPIO_ACTIVE_HIGH>,
-                    <&gpiob 13 GPIO_ACTIVE_HIGH>,
-                    <&gpiob 12 GPIO_ACTIVE_HIGH>;
-        channels = <9>;
-        #mux-cells = <0>;
-    };
 
     kscan: kscan {
-        compatible = "kscan-muxes";
+        compatible = "kscan-enables";
+        status = "okay";
 
-        muxes = <&mux1>, <&mux2>, <&mux3>;
-        mux-names = "mux1", "mux2", "mux3";
+        gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>,
+                <&gpiod 0 GPIO_ACTIVE_HIGH>,
+                <&gpioa 1 GPIO_ACTIVE_HIGH>,
+                <&gpiob 2 GPIO_ACTIVE_HIGH>,
+                <&gpioc 5 GPIO_ACTIVE_HIGH>,
+                <&gpioc 4 GPIO_ACTIVE_HIGH>,
+                <&gpioa 8 GPIO_ACTIVE_HIGH>,
+                <&gpioc 6 GPIO_ACTIVE_HIGH>,
+                <&gpiod 1 GPIO_ACTIVE_HIGH>,
+                <&gpioa 2 GPIO_ACTIVE_HIGH>,
+                <&gpioa 15 GPIO_ACTIVE_HIGH>,
+                <&gpiob 4 GPIO_ACTIVE_HIGH>,
+                <&gpioa 4 GPIO_ACTIVE_HIGH>,
+                <&gpioc 10 GPIO_ACTIVE_HIGH>,
+                <&gpiob 5 GPIO_ACTIVE_HIGH>,
+                <&gpioa 5 GPIO_ACTIVE_HIGH>,
+                <&gpioc 11 GPIO_ACTIVE_HIGH>,
+                <&gpiob 6 GPIO_ACTIVE_HIGH>,
+                <&gpioa 6 GPIO_ACTIVE_HIGH>,
+                <&gpioc 12 GPIO_ACTIVE_HIGH>,
+                <&gpiob 7 GPIO_ACTIVE_HIGH>,
+                <&gpioa 7 GPIO_ACTIVE_HIGH>;
 
-        io-channels = <&adc1 1>, <&adc1 2>, <&adc1 3>;
-        io-channel-names = "cmn1", "cmn2", "cmn3";
+        io-channels = <&adc1 8>;
+
+        map = <22>;
     };
 
-	leds: leds {
-		compatible = "gpio-leds";
-
-		led_error_status: led_error_status {
-			gpios = <&gpioc 4 GPIO_ACTIVE_HIGH>;
-			label = "Error Status LED";
-		};
-
-		led_serial_activity: led_serial_activity {
-			gpios = <&gpioc 5 GPIO_ACTIVE_HIGH>;
-			label = "Serial Activity LED";
-		};
-
-		led_capslock_status: led_capslock_status {
-			gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
-			label = "Capslock Status LED";
-		};
-	};
-
-    led_strip: led_strip {
-        compatible = "ws2812-pwm-dma-stm32wb";
-
-        chain-length = <35>;
-        color-mapping = <LED_COLOR_ID_GREEN
-                         LED_COLOR_ID_RED
-                         LED_COLOR_ID_BLUE>;
-
-        bit-rate = <800000>; // 800Khz
-
-        st,tim-base      = <0x40000000>;  // TIM2 base
-        st,tim-channel   = <12>;          // TIM_CHANNEL_4
-        st,dma-chan-inst = <0x40020008>;  // DMA1_Channel1 base
-        st,dma-req       = <31>;          // TIM2_CH4_REQ
-        st,dma-chan-irqn = <11>;          // DMA1_Channel1_IRQn
-        st,tim-dma-id    = <4>;           // TIM_DMA_ID_CC4
-    };
+    // led_strip: led_strip {
+    //     compatible = "ws2812-pwm-dma-stm32wb";
+    //
+    //     chain-length = <22>;
+    //     color-mapping = <LED_COLOR_ID_GREEN
+    //                      LED_COLOR_ID_RED
+    //                      LED_COLOR_ID_BLUE>;
+    //
+    //     bit-rate = <800000>; // 800Khz
+    //
+    //     st,tim-base      = <0x40000000>;  // TIM2 base
+    //     st,tim-channel   = <12>;          // TIM_CHANNEL_4
+    //     st,dma-chan-inst = <0x40020008>;  // DMA1_Channel1 base
+    //     st,dma-req       = <31>;          // TIM2_CH4_REQ
+    //     st,dma-chan-irqn = <11>;          // DMA1_Channel1_IRQn
+    //     st,tim-dma-id    = <4>;           // TIM_DMA_ID_CC4
+    // };
 
 	hid_dev_0: hid_dev_0 {
 		compatible = "zephyr,hid-device";
@@ -106,22 +79,11 @@
 		in-polling-period-us = <1000>;
 	};
 
-	gpio_keys {
-		compatible = "gpio-keys";
-
-		button_boot0: button_boot0 {
-			label = "SW1";
-			gpios = <&gpioh 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-		};
-	};
-
 	aliases {
 		watchdog0 = &iwdg;
 		die-temp0 = &die_temp;
 		volt-sensor0 = &vref;
 		volt-sensor1 = &vbat;
-		mcuboot-led0 = &led_error_status;
-		mcuboot-button0 = &button_boot0;
 	};
 
     eeprom: eeprom {
@@ -196,7 +158,7 @@
 
 	pwm1: pwm {
 		status = "okay";
-		pinctrl-0 = <&tim2_ch4_pa3>;
+		pinctrl-0 = <&tim2_ch1_pa0>;
 		pinctrl-names = "default";
 	};
 
@@ -227,29 +189,14 @@
     #address-cells = <1>;
     #size-cells = <0>;
 
-    channel@1 {
-        reg = <1>;
+    channel@8 {
+        reg = <8>;
         zephyr,gain = "ADC_GAIN_1";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,resolution = <10>;
     };
 
-    channel@2 {
-        reg = <2>;
-        zephyr,gain = "ADC_GAIN_1";
-        zephyr,reference = "ADC_REF_INTERNAL";
-        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-        zephyr,resolution = <10>;
-    };
-
-    channel@3 {
-        reg = <3>;
-        zephyr,gain = "ADC_GAIN_1";
-        zephyr,reference = "ADC_REF_INTERNAL";
-        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-        zephyr,resolution = <10>;
-    };
 };
 
 &iwdg {

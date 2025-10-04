@@ -1,0 +1,11 @@
+if KSCAN_ENABLES
+
+    config KSCAN_ENABLES_MAX_EN_CNT
+        int "Maximum amount of 'enable' pins supported by driver"
+        default 30
+
+    config KSCAN_ENABLES_MAX_ADC_CH_CNT
+        int "Maximum amount of ADC channels supported by driver"
+        default 3
+
+endif # KSCAN_ENABLES

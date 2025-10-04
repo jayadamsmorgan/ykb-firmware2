@@ -21,8 +21,7 @@ struct kscan_muxes_config {
     const struct adc_dt_spec cmn[CONFIG_KSCAN_MUXES_MAX_MUX_CNT];
 };
 
-static uint16_t read_io_channel(const struct kscan_muxes_config *cfg,
-                                const struct adc_dt_spec *spec) {
+static uint16_t read_io_channel(const struct adc_dt_spec *spec) {
     uint16_t val = 0;
     struct adc_sequence sequence = {
         .buffer = &val,
@@ -37,11 +36,10 @@ static uint16_t read_io_channel(const struct kscan_muxes_config *cfg,
     return val;
 }
 
-static bool kscan_key_pressed_by_threshold(const struct kscan_muxes_config *cfg,
-                                           const struct adc_dt_spec *spec,
+static bool kscan_key_pressed_by_threshold(const struct adc_dt_spec *spec,
                                            uint16_t *value,
                                            uint16_t threshold) {
-    uint16_t val = read_io_channel(cfg, spec);
+    uint16_t val = read_io_channel(spec);
     if (val < threshold) {
         return false;
     }
@@ -75,7 +73,7 @@ static int kscan_muxes_poll_normal(const struct device *dev,
                         mux->name, err);
                 return -2;
             }
-            if (kscan_key_pressed_by_threshold(cfg, spec, NULL,
+            if (kscan_key_pressed_by_threshold(spec, NULL,
                                                thresholds[key_index])) {
                 pressed_keys[pressed_count] = key_index;
                 pressed_count++;
@@ -109,7 +107,7 @@ static int kscan_muxes_poll_race(const struct device *dev,
         }
         for (int j = 0; j < ch_cnt; ++j) {
             uint16_t value;
-            if (kscan_key_pressed_by_threshold(cfg, spec, &value,
+            if (kscan_key_pressed_by_threshold(spec, &value,
                                                thresholds[index])) {
                 if (max_val < value) {
                     max_val = value;

@@ -1,0 +1,5 @@
+board:
+  name: choco_v1
+  vendor: ykb
+  socs:
+    - name: stm32wb55xx

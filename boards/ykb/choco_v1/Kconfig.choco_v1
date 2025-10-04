@@ -1,0 +1,2 @@
+config BOARD_CHOCO_V1
+    select SOC_STM32WB55XX

@@ -1,0 +1,52 @@
+if BOARD_CHOCO_V1
+
+    config BT_STM32_IPM
+        default y
+        depends on BT
+
+    if BT_INTER_KB_COMM_MASTER
+
+        config BT_CENTRAL
+            default y
+
+        config BT_GATT_CLIENT
+            default y
+
+        config BT_FILTER_ACCEPT_LIST
+            default y
+
+    endif # BT_INTER_KB_COMM_MASTER
+
+    if YKB_RIGHT
+
+        config YKB_USBD_PRODUCT
+            default "YKB Choco V1 (Right)"
+            depends on LIB_USB_CONNECT
+
+        config YKB_USBD_PID
+            default 0x0003
+            depends on LIB_USB_CONNECT
+
+        config BT_DEVICE_NAME
+            default "YKB Choco V1 (Right)"
+            depends on LIB_BT_CONNECT
+
+    endif # YKB_RIGHT
+
+    if YKB_LEFT
+
+        config YKB_USBD_PRODUCT
+            default "YKB Choco V1 (Left)"
+            depends on LIB_USB_CONNECT
+
+        config YKB_USBD_PID
+            default 0x0004
+            depends on LIB_USB_CONNECT
+
+        config BT_DEVICE_NAME
+            default "YKB Choco V1 (Left)"
+            depends on LIB_BT_CONNECT
+
+    endif # YKB_LEFT
+
+endif # BOARD_CHOCO_V1

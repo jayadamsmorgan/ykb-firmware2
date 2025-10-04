@@ -8,7 +8,6 @@ if KSCAN
 
     choice KSCAN_BACKEND
         bool "KScan driver backend"
-        default KSCAN_MUXES
 
         config KSCAN_MUXES
             bool "KScan MUXes driver backend"
@@ -17,6 +16,14 @@ if KSCAN
             select MUX
             help
               Enable this option to use the logic of multiplexors to poll keyboard keys.
+
+        config KSCAN_ENABLES
+            bool "KScan 'enables' driver backend"
+            depends on DT_HAS_KSCAN_ENABLES_ENABLED
+            select ADC
+            select GPIO
+            help
+                Enable this option to use the logic of polling by having multiple enable pins and one ADC channel.
 
     endchoice
 
@@ -30,5 +37,6 @@ if KSCAN
     source "subsys/logging/Kconfig.template.log_config"
 
     rsource "Kconfig.muxes"
+    rsource "Kconfig.enables"
 
 endif # KSCAN

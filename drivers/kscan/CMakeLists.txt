@@ -1,3 +1,5 @@
 zephyr_library()
 
 zephyr_library_sources_ifdef(CONFIG_KSCAN_MUXES kscan_muxes.c)
+
+zephyr_library_sources_ifdef(CONFIG_KSCAN_ENABLES kscan_enables.c)
