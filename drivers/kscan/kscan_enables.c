@@ -67,11 +67,16 @@ static int kscan_enables_poll_normal(const struct device *dev,
             if (err)
                 goto gpio_set_err;
 
+            k_sleep(K_MSEC(60));
+
             if (kscan_key_pressed_by_threshold(adc_spec, NULL,
                                                thresholds[key_index])) {
                 pressed_keys[pressed_count] = key_index;
                 pressed_count++;
                 if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
+                    err = gpio_pin_set_dt(&cfg->gpios[key_index], 0);
+                    if (err)
+                        goto gpio_set_err;
                     return pressed_count;
                 }
             }
@@ -140,10 +145,11 @@ static int kscan_enables_init(const struct device *dev) {
 
     for (uint8_t i = 0; i < cfg->gpios_cnt; ++i) {
         const struct gpio_dt_spec *pin = &cfg->gpios[i];
-        if (!gpio_is_ready_dt(pin)) {
-            LOG_ERR("Pin with index %d is not ready", i);
+        if (!device_is_ready(pin->port))
             return -ENODEV;
-        }
+        int ret = gpio_pin_configure_dt(pin, GPIO_OUTPUT_INACTIVE);
+        if (ret)
+            return ret;
     }
     LOG_DBG("GPIO pins are set up");
 
