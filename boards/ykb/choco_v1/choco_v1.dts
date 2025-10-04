@@ -18,7 +18,7 @@
 		zephyr,code-partition = &slot0_partition;
         zephyr,settings-partition = &storage_partition;
 
-        // ykb,backlight = &led_strip;
+        ykb,backlight = &led_strip;
 	};
 
     kscan: kscan {
