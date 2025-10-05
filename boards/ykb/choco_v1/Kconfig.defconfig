@@ -17,6 +17,38 @@ if BOARD_CHOCO_V1
 
     endif # BT_INTER_KB_COMM_MASTER
 
+    if YKB_USB_ENABLED
+
+        config USB_DEVICE_STACK_NEXT
+            default y
+
+        config CDC_ACM_SERIAL_INITIALIZE_AT_BOOT
+            default y
+
+        config USBD_HID_SUPPORT
+            default y
+
+        config YKB_USBD_REMOTE_WAKEUP
+            default y
+
+        config YKB_USBD_MAX_POWER
+            default 125 # 125*2ma=250ma
+
+    endif # YKB_USB_ENABLED
+
+    if YKB_BT_ENABLED
+
+        config BT_DEVICE_APPEARANCE
+            default 961
+
+        config BT_MAX_PAIRED
+            default 10
+
+        config BT_MAX_CONN
+            default 2
+
+    endif # YKB_BT_ENABLED
+
     if YKB_RIGHT
 
         config YKB_USBD_PRODUCT

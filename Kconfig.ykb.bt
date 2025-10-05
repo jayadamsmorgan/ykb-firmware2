@@ -1,5 +1,4 @@
 menuconfig YKB_BT_ENABLED
     bool "BT support"
-    default y
     help
       This option enables the support for Bluetooth on YarmanKeyboards keyboard

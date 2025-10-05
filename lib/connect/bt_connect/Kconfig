@@ -2,6 +2,18 @@ config LIB_BT_CONNECT
     bool "Support for BLE HID connection"
     default y
     depends on YKB_BT_ENABLED
+    select BT
+    select BT_SMP
+    select BT_BONDABLE
+    select BT_PRIVACY
+    select BT_PERIPHERAL
+    select BT_DIS
+    select BT_BAS
+    select BT_BAS_BLS
+    select SETTINGS
+    select BT_SETTINGS
+    select BT_HCI_ERR_TO_STR
+    select BT_GAP_AUTO_UPDATE_CONN_PARAMS
     help
         This option enables the 'BTConnect' library.
 

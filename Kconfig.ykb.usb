@@ -1,6 +1,5 @@
 menuconfig YKB_USB_ENABLED
     bool "USB support"
-    default y
     help
       This option enables the support for USB on YarmanKeyboards keyboard
 

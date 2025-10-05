@@ -49,11 +49,11 @@ struct kb_fn_keystroke {
 #endif // CONFIG_LIB_USB_CONNECT
 
 #define KB_FN_KEYSTROKE_DEFINE_LIB_KB_SETTINGS(callback, /* keys... */...)     \
-    KB_FN_KEYSTROKE_DEFINE(callback, __VA_ARGS__)
+    __KB_FN_KEYSTROKE_DEFINE(callback, __VA_ARGS__)
 
 #if CONFIG_KB_BACKLIGHT
 #define KB_FN_KEYSTROKE_DEFINE_LIB_KB_BL(callback, /* keys... */...)           \
-    KB_FN_KEYSTROKE_DEFINE(keystroke_name, keys_arr, key_count, callback)
+    __KB_FN_KEYSTROKE_DEFINE(callback, __VA_ARGS__)
 #else
 #define KB_FN_KEYSTROKE_DEFINE_LIB_KB_BL(callback, /* keys... */...)
 #endif // CONFIG_KB_BACKLIGHT

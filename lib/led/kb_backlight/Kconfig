@@ -1,8 +1,11 @@
+DT_CHOSEN_BACKLIGHT_FEATURE := ykb,backlight
+
 menuconfig KB_BACKLIGHT
     bool "Backlight driver"
     depends on LED || LED_STRIP || LED_STRIP_CUSTOM
+    depends on $(dt_chosen_enabled,$(DT_CHOSEN_BACKLIGHT_FEATURE))
     help
-     This option enables backlight support for YKB keyboards.
+      This option enables backlight support for YKB keyboards.
 
 if KB_BACKLIGHT
 
