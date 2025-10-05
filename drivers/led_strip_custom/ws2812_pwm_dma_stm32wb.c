@@ -262,6 +262,7 @@ static void ws_compute_timings(const struct device *dev) {
 
 static void ws2812_pwm_dma_isr(const void *arg) {
     struct ws2812_pwm_data *data = (struct ws2812_pwm_data *)arg;
+    HAL_DMA_IRQHandler(&data->hdma);
     if (data->sem_release) {
         k_sem_give(&data->ws_sem);
     } else {
@@ -273,6 +274,9 @@ static int ws2812_pwm_init(const struct device *dev) {
     struct ws2812_pwm_data *data = dev->data;
 
     int ret;
+    __HAL_RCC_DMAMUX1_CLK_ENABLE();
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    __HAL_RCC_TIM2_CLK_ENABLE();
 
     ret = HAL_TIM_PWM_Init((TIM_HandleTypeDef *)&data->htim);
     if (ret != HAL_OK) {
@@ -321,6 +325,7 @@ static int ws2812_pwm_init(const struct device *dev) {
     WS2812_POST_INIT_FN(idx) {                                                 \
         IRQ_CONNECT(DT_INST_PROP(idx, st_dma_chan_irqn), 0,                    \
                     ws2812_pwm_dma_isr, &ws2812_pwm_##idx##_data, 0);          \
+        irq_enable(DT_INST_PROP(idx, st_dma_chan_irqn));                       \
     }
 
 #define WS2812_PWM_DEFINE(idx)                                                 \
