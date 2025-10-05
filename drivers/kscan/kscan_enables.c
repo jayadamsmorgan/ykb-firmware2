@@ -67,7 +67,7 @@ static int kscan_enables_poll_normal(const struct device *dev,
             if (err)
                 goto gpio_set_err;
 
-            k_sleep(K_MSEC(60));
+            k_sleep(K_MSEC(1));
 
             if (kscan_key_pressed_by_threshold(adc_spec, NULL,
                                                thresholds[key_index])) {
