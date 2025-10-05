@@ -52,12 +52,12 @@ int main(void) {
 #endif // CONFIG_LIB_USB_CONNECT
 
 #if CONFIG_LIB_BT_CONNECT
-    ret = bt_connect_init();
-    if (ret) {
-        LOG_ERR("BTConnect init error: %d", ret);
-        return 0;
-    }
-    LOG_DBG("BTConnect is ready!");
+    // ret = bt_connect_init();
+    // if (ret) {
+    //     LOG_ERR("BTConnect init error: %d", ret);
+    //     return 0;
+    // }
+    // LOG_DBG("BTConnect is ready!");
 #endif // CONFIG_LIB_BT_CONNECT
 
     ret = kb_settings_init();
