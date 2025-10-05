@@ -1,7 +1,7 @@
 #ifndef CHOCO_V1_KEYSTROKES_H
 #define CHOCO_V1_KEYSTROKES_H
 
-#include <lib/keyboard/keystrokes/kb_fn_keystroke.h>
+#include <lib/keyboard/kb_fn_keystroke.h>
 
 // Bluetooth
 //

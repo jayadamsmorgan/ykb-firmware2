@@ -16,10 +16,8 @@
 struct kb_bl_mode {
     void (*init)(size_t len, uint8_t brightness);
     void (*deinit)();
-    void (*tick)(uint32_t dt_ms);
-    void (*apply)(struct kb_bl_rgb *frame, size_t len);
+    void (*apply)(uint32_t dt_ms, struct kb_bl_rgb *frame, size_t len);
     void (*on_event)(kb_key_t *key, bool pressed);
-    void (*set_brightness)(uint8_t brightness);
     const char *name;
 };
 
@@ -45,16 +43,14 @@ static inline struct kb_bl_mode *kb_bl_mode_by_idx(size_t idx) {
     return ret;
 }
 
-#define KB_BL_MODE_DEFINE(mode_name, init_fn, deinit_fn, tick_fn, apply_fn,    \
-                          on_event_fn, set_brightness_fn)                      \
+#define KB_BL_MODE_DEFINE(mode_name, init_fn, deinit_fn, apply_fn,             \
+                          on_event_fn)                                         \
     static STRUCT_SECTION_ITERABLE(kb_bl_mode, __kb_bl_mode_##mode_name) = {   \
         .name = STRINGIFY(mode_name),                                          \
         .init = init_fn,                                                       \
         .deinit = deinit_fn,                                                   \
-        .tick = tick_fn,                                                       \
         .apply = apply_fn,                                                     \
         .on_event = on_event_fn,                                               \
-        .set_brightness = set_brightness_fn,                                   \
     }
 
 #endif // LIB_KB_BACKLIGHT_MODES_H_

@@ -11,12 +11,7 @@
 #include <lib/keyboard/kb_keys.h>
 #include <lib/keyboard/kb_settings.h>
 
-// clang-format off
-#define KB_EXPAND(x) x
-#define KB_CONCAT(n1, n2, n3) <KB_EXPAND(n1)KB_EXPAND(n2)KB_EXPAND(n3)>
-// Include the right keystrokes based on the board
-#include KB_CONCAT(lib/keyboard/keystrokes/,CONFIG_BOARD,.h)
-// clang-format on
+#include YKB_FN_KEYSTROKES_PATH
 
 #include <string.h>
 

@@ -9,11 +9,7 @@
 
 LOG_MODULE_REGISTER(kb_settings, CONFIG_KB_SETTINGS_LOG_LEVEL);
 
-// clang-format off
-#define KB_EXPAND(x) x
-#define KB_CONCAT(n1, n2, n3) <KB_EXPAND(n1)KB_EXPAND(n2)KB_EXPAND(n3)>
-#include KB_CONCAT(lib/keyboard/mappings/,CONFIG_BOARD,.h)
-// clang-format on
+#include YKB_DEF_MAPPINGS_PATH
 
 #define DEF_MAP default_mappings
 BUILD_ASSERT(sizeof DEF_MAP != 0, "Mappings are empty.");

@@ -1,10 +1,9 @@
-#ifndef LIB_BT_CONNECT_KB_FN_KEYSTROKE_H_
-#define LIB_BT_CONNECT_KB_FN_KEYSTROKE_H_
+#ifndef KB_FN_KEYSTROKE_H_
+#define KB_FN_KEYSTROKE_H_
 
 #include <zephyr/sys/iterable_sections.h>
 
 #include <lib/keyboard/kb_keys.h>
-#include <lib/keyboard/keystrokes/kb_fn_keystroke.h>
 
 #include <lib/connect/bt_connect.h>
 #include <lib/connect/usb_connect.h>
@@ -59,4 +58,4 @@ struct kb_fn_keystroke {
 #define KB_FN_KEYSTROKE_DEFINE_LIB_KB_BL(callback, /* keys... */...)
 #endif // CONFIG_KB_BACKLIGHT
 
-#endif // LIB_BT_CONNECT_KB_FN_KEYSTROKE_H_
+#endif // KB_FN_KEYSTROKE_H_
