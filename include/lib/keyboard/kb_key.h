@@ -12,7 +12,7 @@ typedef struct {
     bool pressed;
 } kb_key_t;
 
-bool kb_key_equal(kb_key_t *lhs, kb_key_t *rhs) {
+static inline bool kb_key_equal(kb_key_t *lhs, kb_key_t *rhs) {
     if (lhs == NULL || rhs == NULL)
         return false;
 

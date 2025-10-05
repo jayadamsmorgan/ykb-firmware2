@@ -14,9 +14,10 @@
 #include <string.h>
 
 struct kb_bl_mode {
-    void (*init)(size_t len, uint8_t brightness);
+    void (*init)(size_t len);
     void (*deinit)();
-    void (*apply)(uint32_t dt_ms, struct kb_bl_rgb *frame, size_t len);
+    void (*apply)(uint32_t dt_ms, float speed, struct kb_bl_rgb *frame,
+                  size_t len);
     void (*on_event)(kb_key_t *key, bool pressed);
     const char *name;
 };

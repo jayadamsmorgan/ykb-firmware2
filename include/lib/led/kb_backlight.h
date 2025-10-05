@@ -10,7 +10,7 @@ enum kb_backlight_type {
     KB_BACKLIGHT_LED_STRIP = 1,
 };
 
-int kb_backlight_set_mode(int mode);
+int kb_backlight_set_mode(size_t mode);
 void kb_backlight_next_mode();
 void kb_backlight_prev_mode();
 

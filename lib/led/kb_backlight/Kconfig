@@ -21,6 +21,11 @@ if KB_BACKLIGHT
             depends on LED_STRIP || LED_STRIP_CUSTOM
 
     endchoice
+
+    config KB_BACKLIGHT_MAX_BRIGHTNESS_COMBINED
+        int "Value considered as maximum combined value of RGB (0 - 255*3)"
+        range 0 765
+        default 100
        
     module = KB_BACKLIGHT
     module-str = kb_backlight
