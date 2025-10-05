@@ -1,7 +1,7 @@
 #include <lib/keyboard/kb_settings.h>
 
-#include <zephyr/drivers/eeprom.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/settings/settings.h>
 #include <zephyr/toolchain.h>
 
 #include <stdint.h>
@@ -12,7 +12,6 @@ LOG_MODULE_REGISTER(kb_settings, CONFIG_KB_SETTINGS_LOG_LEVEL);
 // clang-format off
 #define KB_EXPAND(x) x
 #define KB_CONCAT(n1, n2, n3) <KB_EXPAND(n1)KB_EXPAND(n2)KB_EXPAND(n3)>
-// Include the right mapping based on the board
 #include KB_CONCAT(lib/keyboard/mappings/,CONFIG_BOARD,.h)
 // clang-format on
 
@@ -29,109 +28,35 @@ BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
              "Default value for key not pressed should be less than default "
              "value for key pressed fully.");
 
-static kb_settings_t settings = {0};
+static kb_settings_t settings;
 
-#if CONFIG_EEPROM
+/* -------- Settings subsystem keys --------
+ * Namespace: "kb"
+ * Item key : "blob"
+ * Full path: "kb/blob"
+ */
+#define KB_SETTINGS_NS "kb"
+#define KB_SETTINGS_ITEM "blob"
+#define KB_SETTINGS_KEY KB_SETTINGS_NS "/" KB_SETTINGS_ITEM
 
-static const struct device *const eeprom = DEVICE_DT_GET(DT_PATH(eeprom));
-
-static uint16_t crc16(const uint8_t *data, size_t length) {
-
-    uint16_t crc = 0xFFFF;
-
-    if (!data || length == 0) {
-        return crc;
-    }
-
-    const uint16_t polynomial = 0xA001;
-
-    for (size_t i = 0; i < length; i++) {
-        crc ^= data[i];
-        for (int bit = 0; bit < 8; bit++) {
-            if (crc & 0x0001) {
-                crc = (crc >> 1) ^ polynomial;
-            } else {
-                crc = crc >> 1;
-            }
-        }
-    }
-    return crc;
-}
-
-struct eeprom_kb_settings_pack {
-    uint16_t crc16;
+/* Versioned image so we can change kb_settings_t later */
+#define KB_SETTINGS_IMAGE_VERSION 1
+struct kb_settings_image {
+    uint16_t version;
     kb_settings_t settings;
 };
 
-static int kb_settings_load_eeprom() {
+/* ------------ Defaults (unchanged) ------------- */
+static void kb_settings_load_default(void) {
+    memset(&settings, 0, sizeof(settings));
 
-    if (!device_is_ready(eeprom)) {
-        LOG_ERR("Unable to read keyboard settings from EEPROM: EEPROM device "
-                "is not ready");
-        return -1;
-    }
-
-    struct eeprom_kb_settings_pack pack = {0};
-
-    int err =
-        eeprom_read(eeprom, 0, &pack, sizeof(struct eeprom_kb_settings_pack));
-    if (err) {
-        LOG_ERR("Unable to read keyboard settings from EEPROM: EEPROM read "
-                "error %d",
-                err);
-        return -2;
-    }
-
-    uint16_t crc =
-        crc16((const uint8_t *)&pack.settings, sizeof(kb_settings_t));
-
-    if (pack.crc16 != crc) {
-        LOG_WRN("CRC mismatch (0x%04X != 0x%04X), EEPROM data is either "
-                "corrupt or empty.",
-                pack.crc16, crc);
-        return -3;
-    }
-
-    memcpy(&settings, &pack.settings, sizeof(kb_settings_t));
-
-    LOG_INF("Successfully loaded keyboard settings from EEPROM");
-
-    return 0;
-}
-
-static void kb_settings_save_eeprom() {
-    struct eeprom_kb_settings_pack pack = {
-        .crc16 = crc16((const uint8_t *)&settings, sizeof(kb_settings_t)),
-        .settings = settings,
-    };
-    LOG_DBG("Saving keyboard settings to EEPROM with CRC 0x%02X", pack.crc16);
-    int res =
-        eeprom_write(eeprom, 0, &pack, sizeof(struct eeprom_kb_settings_pack));
-    if (res) {
-        LOG_ERR("Unable to write keyboard settings to EEPROM: %d", res);
-    }
-}
-
-#endif // CONFIG_EEPROM
-
-#if CONFIG_EEPROM
-#define SETTINGS_LOAD() kb_settings_load_eeprom()
-#define SETTINGS_SAVE() kb_settings_save_eeprom()
-#else
-#define SETTINGS_LOAD() -1
-#define SETTINGS_SAVE()
-#endif // CONFIG_EEPROM
-
-static void kb_settings_load_default() {
     settings.key_polling_rate = CONFIG_KB_SETTINGS_DEFAULT_POLLING_RATE;
 
-    float range =
-        CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM - CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
+    float range = (float)(CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM -
+                          CONFIG_KB_SETTINGS_DEFAULT_MINIMUM);
     float default_threshold =
-        ((range / 100) * CONFIG_KB_SETTINGS_DEFAULT_THRESHOLD) +
-        CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
-
-    LOG_INF("Default threshold value: %d", (uint16_t)default_threshold);
+        ((range / 100.0f) * CONFIG_KB_SETTINGS_DEFAULT_THRESHOLD) +
+        (float)CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
 
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
         settings.key_thresholds[i] = (uint16_t)default_threshold;
@@ -144,27 +69,118 @@ static void kb_settings_load_default() {
     settings.mode = KB_MODE_NORMAL;
 
     memcpy(settings.mappings, DEF_MAP, sizeof(DEF_MAP));
+
+    LOG_INF("Loaded keyboard defaults (threshold=%u)",
+            (unsigned)((uint16_t)default_threshold));
 }
 
-int kb_settings_init() {
+static bool s_loaded_ok = false;
 
-    int res;
+/* -------- settings handler: load path ("kb/blob") -------- */
+static int kb_settings_set(const char *key, size_t len,
+                           settings_read_cb read_cb, void *cb_arg) {
+    if (strcmp(key, KB_SETTINGS_ITEM) != 0) {
+        return -ENOENT;
+    }
 
-    res = SETTINGS_LOAD();
+    if (len < sizeof(struct kb_settings_image)) {
+        LOG_WRN("kb settings too small (%zu)", len);
+        return -EINVAL;
+    }
 
-    if (res)
+    struct kb_settings_image img;
+    ssize_t rlen = read_cb(cb_arg, &img, sizeof(img));
+    if (rlen < 0) {
+        LOG_ERR("kb settings read_cb error: %d", (int)rlen);
+        return (int)rlen;
+    }
+    if ((size_t)rlen != sizeof(img)) {
+        LOG_WRN("kb settings truncated: %zd", rlen);
+        return -EINVAL;
+    }
+
+    if (img.version != KB_SETTINGS_IMAGE_VERSION) {
+        LOG_WRN("kb settings version mismatch: got %u, want %u", img.version,
+                KB_SETTINGS_IMAGE_VERSION);
+        /* You could attempt migration here if you increment versions later. */
+        return -EINVAL;
+    }
+
+    settings = img.settings;
+    s_loaded_ok = true;
+    LOG_INF("Keyboard settings loaded from NVS");
+    return 0;
+}
+
+/* Optional: enable `settings_save()` flow (not required if you use save_one) */
+static int kb_settings_export(int (*export_func)(const char *name,
+                                                 const void *val,
+                                                 size_t val_len)) {
+    struct kb_settings_image img = {
+        .version = KB_SETTINGS_IMAGE_VERSION,
+        .settings = settings,
+    };
+    return export_func(KB_SETTINGS_ITEM, &img, sizeof(img));
+}
+
+static struct settings_handler kb_settings_handler = {
+    .name = KB_SETTINGS_NS,
+    .h_set = kb_settings_set,
+    .h_export = kb_settings_export, /* not strictly required */
+};
+
+/* ------------- Public API -------------- */
+
+int kb_settings_init(void) {
+    int err;
+
+    err = settings_subsys_init();
+    if (err) {
+        LOG_ERR("settings_subsys_init failed: %d", err);
+        /* continue; we'll load defaults below if needed */
+    }
+
+    err = settings_register(&kb_settings_handler);
+    if (err) {
+        LOG_ERR("settings_register failed: %d", err);
+        /* continue */
+    }
+
+    s_loaded_ok = false; /* reset flag */
+    err = settings_load_subtree(KB_SETTINGS_NS);
+    if (!s_loaded_ok) { /* <-- key point */
+        LOG_WRN("No valid keyboard settings found (err=%d) — loading defaults",
+                err);
         kb_settings_load_default();
 
-    if (res > 0) // Stored settings either corrupt or empty
-        SETTINGS_SAVE();
+        struct kb_settings_image img = {
+            .version = KB_SETTINGS_IMAGE_VERSION,
+            .settings = settings,
+        };
+        int w = settings_save_one(KB_SETTINGS_KEY, &img, sizeof(img));
+        if (w) {
+            LOG_WRN("Could not save default kb settings: %d", w);
+        } else {
+            LOG_INF("Default kb settings saved to NVS");
+        }
+    }
 
     return 0;
 }
 
-kb_settings_t *kb_settings_get() {
+kb_settings_t *kb_settings_get(void) {
     return &settings;
 }
 
-void kb_settings_save() {
-    SETTINGS_SAVE();
+void kb_settings_save(void) {
+    struct kb_settings_image img = {
+        .version = KB_SETTINGS_IMAGE_VERSION,
+        .settings = settings,
+    };
+    int err = settings_save_one(KB_SETTINGS_KEY, &img, sizeof(img));
+    if (err) {
+        LOG_ERR("settings_save_one failed: %d", err);
+    } else {
+        LOG_INF("Keyboard settings saved");
+    }
 }

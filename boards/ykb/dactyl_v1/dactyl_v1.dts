@@ -123,13 +123,6 @@
 		mcuboot-led0 = &led_error_status;
 		mcuboot-button0 = &button_boot0;
 	};
-
-    eeprom: eeprom {
-        compatible = "zephyr,emu-eeprom";
-        size = <DT_SIZE_K(3)>;
-        pagesize = <DT_SIZE_K(4)>;
-        partition = <&eeprom_partition>;
-    };
 };
 
 &die_temp {
@@ -311,13 +304,8 @@ zephyr_udc0: &usb {
 
         storage_partition: partition@d6000 {
             label = "storage";
-            reg = <0x000d6000 DT_SIZE_K(8)>;
+            reg = <0x000d6000 DT_SIZE_K(16)>;
         };
-
-		eeprom_partition: partition@d8000 {
-			label = "eeprom";
-			reg = <0x000d8000 DT_SIZE_K(8)>;
-		};
 	};
 };
 
