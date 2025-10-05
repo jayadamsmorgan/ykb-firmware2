@@ -1,7 +1,8 @@
 #ifndef LIB_KB_BACKLIGHT_H_
 #define LIB_KB_BACKLIGHT_H_
 
-#include <autoconf.h>
+#include <lib/keyboard/kb_key.h>
+
 #include <zephyr/drivers/led_strip.h>
 
 enum kb_backlight_type {
@@ -17,7 +18,7 @@ void kb_backlight_prev_mode();
 void kb_backlight_set_brightness(uint8_t brightness);
 
 static inline void kb_backlight_set_brightness_min() {
-    kb_backlight_set_brightness(0);
+    kb_backlight_set_brightness(1);
 }
 static inline void kb_backlight_set_brightness_low() {
     kb_backlight_set_brightness(25);
@@ -35,6 +36,9 @@ static inline void kb_backlight_set_brightness_max() {
 void kb_backlight_toggle();
 void kb_backlight_turn_on();
 void kb_backlight_turn_off();
+
+void kb_backlight_on_event(kb_key_t *key);
+void kb_backlight_handle();
 
 static inline enum kb_backlight_type kb_backlight_get_type() {
 #if CONFIG_KB_BACKLIGHT_DEVICE_LED

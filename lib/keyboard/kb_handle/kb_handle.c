@@ -50,6 +50,14 @@ static inline void for_each_set_bit(uint32_t word, uint16_t base,
 }
 
 static void on_press(uint16_t key_index, kb_settings_t *settings) {
+#if CONFIG_KB_BACKLIGHT
+    kb_key_t key = {
+        .index = key_index,
+        .pressed = true,
+        .value = 100, // TODO
+    };
+    kb_backlight_on_event(&key);
+#endif // CONFIG_KB_BACKLIGHT
     uint8_t code =
         settings
             ->mappings[settings->layer_index * CONFIG_KB_KEY_COUNT + key_index];
@@ -106,6 +114,16 @@ static void on_press(uint16_t key_index, kb_settings_t *settings) {
 }
 
 static void on_release(uint16_t key_index, kb_settings_t *settings) {
+
+#if CONFIG_KB_BACKLIGHT
+    kb_key_t key = {
+        .index = key_index,
+        .pressed = false,
+        .value = 0, // TODO
+    };
+    kb_backlight_on_event(&key);
+#endif // CONFIG_KB_BACKLIGHT
+
     uint8_t code =
         settings
             ->mappings[settings->layer_index * CONFIG_KB_KEY_COUNT + key_index];
