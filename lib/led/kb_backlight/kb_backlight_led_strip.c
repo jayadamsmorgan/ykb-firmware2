@@ -60,7 +60,7 @@ int kb_backlight_init() {
     }
 
     state.mode_idx = 0;
-    state.mode = kb_bl_mode_by_idx(state.mode_idx);
+    state.mode = kb_bl_mode_find("press_bruise_red");
     if (state.mode) {
         LOG_INF("Using backlight mode '%s'", state.mode->name);
         if (state.mode->init) {

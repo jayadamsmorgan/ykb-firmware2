@@ -23,15 +23,8 @@ typedef struct {
 
 static bruise_state_t S;
 
-// pick side (LEFT by default if no side flag defined)
-#if defined(CONFIG_KB_IS_LEFT) || defined(CONFIG_YKB_LEFT) ||                  \
-    defined(KB_SIDE_LEFT)
-#define LED_POS LEDS_POSITIONS_LEFT
-#define KEY2LED KEY_IDX_TO_LED_IDX_MAP_LEFT
-#else
-#define LED_POS LEDS_POSITIONS_RIGHT
-#define KEY2LED KEY_IDX_TO_LED_IDX_MAP_RIGHT
-#endif
+#define LED_POS LEDS_POSITIONS
+#define KEY2LED KEY_IDX_TO_LED_IDX_MAP
 
 // distance^2 in Q16.16 (from kb_leds_geom.h helper)
 static inline int32_t d2_led(uint8_t led, kb_fp16 cx, kb_fp16 cy) {

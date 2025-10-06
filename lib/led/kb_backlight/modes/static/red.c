@@ -26,4 +26,4 @@ static void apply(uint32_t dt_ms, float speed, struct led_rgb *frame) {
     }
 }
 
-// KB_BL_MODE_DEFINE(static_red, init, deinit, apply, NULL);
+KB_BL_MODE_DEFINE(static_red, init, deinit, apply, NULL);
