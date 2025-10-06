@@ -18,6 +18,7 @@ static struct bt_conn *ykb_master_conn;
 
 static void ykb_ccc_cfg_changed(const struct bt_gatt_attr *attr,
                                 uint16_t value) {
+    LOG_INF("ykb_ccc_cfg_changed");
     ykb_ccc_enabled = (value == BT_GATT_CCC_NOTIFY);
 }
 
@@ -28,12 +29,15 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_CCC(ykb_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
 
 static void ykb_peer_connected(struct bt_conn *conn, uint8_t err) {
+
+    LOG_INF("We are connected!");
     if (!err)
         ykb_master_conn = bt_conn_ref(conn);
 }
 
 static void ykb_peer_disconnected(struct bt_conn *conn, uint8_t reason) {
     if (ykb_master_conn == conn) {
+        LOG_INF("We are disconnected!");
         bt_conn_unref(ykb_master_conn);
         ykb_master_conn = NULL;
     }
@@ -45,9 +49,14 @@ BT_CONN_CB_DEFINE(peer_cb) = {
 };
 
 bool ykb_slave_is_connected() {
+    // if (ykb_master_conn)
+    //     LOG_INF("ykb_master_conn not NULL");
+    // if (ykb_ccc_enabled)
+    //     LOG_INF("ykb_ccc_enabled not NULL");
     return ykb_master_conn && ykb_ccc_enabled;
 }
 
 void ykb_slave_send_keys(const uint8_t data[8]) {
+    LOG_INF("Sending keys!");
     bt_gatt_notify(ykb_master_conn, &ykb_split_svc.attrs[1], data, 8);
 }

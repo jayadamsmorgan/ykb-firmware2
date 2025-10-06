@@ -59,9 +59,10 @@ static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xC1, 0x03),
     BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
                   BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)),
-#if CONFIG_BT_INTER_KB_COMM
-    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le, sizeof(ykb_svc_uuid_le)),
-#endif // CONFIG_BT_INTER_KB_COMM
+#if CONFIG_BT_INTER_KB_COMM_SLAVE
+    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le,
+            sizeof(ykb_svc_uuid_le)), // <- сюда
+#endif
 };
 
 static const struct bt_data sd[] = {
@@ -132,7 +133,6 @@ static void bt_ready(int err) {
         return;
     }
 
-#if CONFIG_BT_INTER_KB_COMM_MASTER || !CONFIG_BT_INTER_KB_COMM
     err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
                           ARRAY_SIZE(sd));
 
@@ -143,11 +143,10 @@ static void bt_ready(int err) {
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER
 
+    LOG_INF("Starting first scan");
     ykb_master_link_start();
 
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
-
-#endif // CONFIG_BT_INTER_KB_COMM_MASTER || !CONFIG_BT_INTER_KB_COMM
 
     LOG_INF("Advertising successfully started");
 }
@@ -206,6 +205,8 @@ void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                      uint8_t report_size) {
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
     if (ykb_slave_is_connected()) {
+
+        LOG_INF("Slave is BLE connected sending ");
         ykb_slave_send_keys(report);
     } else {
         bt_gatt_notify(NULL, &hog_svc.attrs[6], report,

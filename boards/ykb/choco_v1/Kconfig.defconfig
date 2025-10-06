@@ -15,6 +15,9 @@ if BOARD_CHOCO_V1
         config BT_FILTER_ACCEPT_LIST
             default y
 
+        config BT_SCAN_WITH_IDENTITY
+            default y
+
     endif # BT_INTER_KB_COMM_MASTER
 
     if YKB_USB_ENABLED

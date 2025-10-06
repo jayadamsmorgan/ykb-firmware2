@@ -44,6 +44,8 @@ static uint8_t slave_report[BT_CONNECT_HID_REPORT_COUNT] = {0};
 static uint8_t ykb_notify_cb(struct bt_conn *conn,
                              struct bt_gatt_subscribe_params *params,
                              const void *data, uint16_t len) {
+
+    LOG_INF("Receive slave message");
     if (!data)
         return BT_GATT_ITER_STOP;
 
@@ -55,8 +57,12 @@ static uint8_t ykb_notify_cb(struct bt_conn *conn,
 static uint8_t ykb_discover_func(struct bt_conn *conn,
                                  const struct bt_gatt_attr *attr,
                                  struct bt_gatt_discover_params *params) {
-    if (!attr)
+    if (!attr) {
+        LOG_INF("Stop discovering");
         return BT_GATT_ITER_STOP;
+    }
+
+    LOG_INF("Trying to discover");
 
     switch (params->type) {
     case BT_GATT_DISCOVER_PRIMARY: {
@@ -64,6 +70,7 @@ static uint8_t ykb_discover_func(struct bt_conn *conn,
         disc_params.start_handle = attr->handle + 1;
         disc_params.end_handle = 0xFFFF;
         disc_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
+        LOG_INF("Trying to bt_gatt_discover");
         bt_gatt_discover(conn, &disc_params);
         break;
     }
@@ -73,7 +80,9 @@ static uint8_t ykb_discover_func(struct bt_conn *conn,
         sub_params.notify = ykb_notify_cb;
         sub_params.value = BT_GATT_CCC_NOTIFY;
         sub_params.ccc_handle = 0;
-        bt_gatt_subscribe(conn, &sub_params);
+        LOG_INF("Trying to bt_gatt_subscribe");
+        int rc = bt_gatt_subscribe(conn, &sub_params);
+        LOG_INF("bt_gatt_subscribe rc=%d", rc);
         return BT_GATT_ITER_STOP;
     }
     default:
@@ -93,15 +102,22 @@ static void ykb_start_discovery(struct bt_conn *conn) {
 
 static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
                              uint8_t adv_type, struct net_buf_simple *ad) {
+
+    LOG_INF("Found some BT device");
+
     if (!adv_has_split_uuid(ad))
         return;
+
+    LOG_INF("It is left keyboard!!!");
 
     if (ykb_slave_conn)
         return;
 
+    LOG_INF("First time keyboard registration");
+
     struct bt_le_conn_param conn_param = {
-        .interval_min = 6,
-        .interval_max = 12,
+        .interval_min = 24,
+        .interval_max = 40,
         .latency = 0,
         .timeout = 400,
     };
@@ -201,13 +217,13 @@ BT_CONN_CB_DEFINE(ykb_peer_cb) = {
 };
 
 void ykb_master_link_start() {
-    bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
+    int err = bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
+    LOG_INF("Scan start with code: %d", err);
 }
 
 void ykb_master_link_stop() {
     bt_le_scan_stop();
     if (ykb_slave_conn) {
-        bt_conn_disconnect(ykb_slave_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     }
 }
 
