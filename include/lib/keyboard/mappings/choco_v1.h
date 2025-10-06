@@ -16,7 +16,7 @@
 // LEFT:
 
 #ifndef KEY00
-#define KEY00 KEY_NOKEY
+#define KEY00 KEY_FN
 #endif // KEY00
 #ifndef KEY01
 #define KEY01 KEY_ESCAPE
@@ -154,7 +154,7 @@
 #endif // KEY122
 
 #ifndef KEY130
-#define KEY130 KEY_NOKEY
+#define KEY130 KEY_FN
 #endif // KEY130
 #ifndef KEY131
 #define KEY131 KEY_RIGHTSHIFT
@@ -323,40 +323,42 @@
 static uint8_t default_mappings[] = {
 
 #ifdef CONFIG_YKB_LEFT
-    KEY00,          KEY01,          KEY02,
-
-    KEY10,          KEY11,          KEY12,
-
-    KEY20,          KEY21,          KEY22,
-
-    KEY30,          KEY31,          KEY32,
-
-    KEY40,          KEY41,          KEY42,
 
     KEY50,          KEY51,          KEY52,
 
-    KEY60,          KEY61,          KEY62,          KEY63,
+    KEY63,          KEY62,          KEY61,          KEY60,
 
-    KEY00_LAYER_1,  KEY01_LAYER_1,  KEY02_LAYER_1,
+    KEY40,          KEY41,          KEY42,
 
-    KEY10_LAYER_1,  KEY11_LAYER_1,  KEY12_LAYER_1,
+    KEY30,          KEY31,          KEY32,
 
-    KEY20_LAYER_1,  KEY21_LAYER_1,  KEY22_LAYER_1,
+    KEY20,          KEY21,          KEY22,
 
-    KEY30_LAYER_1,  KEY31_LAYER_1,  KEY32_LAYER_1,
+    KEY10,          KEY11,          KEY12,
 
-    KEY40_LAYER_1,  KEY41_LAYER_1,  KEY42_LAYER_1,
+    KEY00,          KEY01,          KEY02,
 
     KEY50_LAYER_1,  KEY51_LAYER_1,  KEY52_LAYER_1,
 
-    KEY60_LAYER_1,  KEY61_LAYER_1,  KEY62_LAYER_1,  KEY63_LAYER_1,
+    KEY63_LAYER_1,  KEY62_LAYER_1,  KEY61_LAYER_1,  KEY60_LAYER_1,
+
+    KEY40_LAYER_1,  KEY41_LAYER_1,  KEY42_LAYER_1,
+
+    KEY30_LAYER_1,  KEY31_LAYER_1,  KEY32_LAYER_1,
+
+    KEY20_LAYER_1,  KEY21_LAYER_1,  KEY22_LAYER_1,
+
+    KEY10_LAYER_1,  KEY11_LAYER_1,  KEY12_LAYER_1,
+
+    KEY00_LAYER_1,  KEY01_LAYER_1,  KEY02_LAYER_1,
 
 #endif // CONFIG_YKB_LEFT
 
 #ifdef CONFIG_YKB_RIGHT
-    KEY70,          KEY71,          KEY72,          KEY73,
 
     KEY80,          KEY81,          KEY82,
+
+    KEY70,          KEY71,          KEY72,          KEY73,
 
     KEY90,          KEY91,          KEY92,
 
@@ -368,9 +370,9 @@ static uint8_t default_mappings[] = {
 
     KEY130,         KEY131,         KEY132,
 
-    KEY70_LAYER_1,  KEY71_LAYER_1,  KEY72_LAYER_1,  KEY73_LAYER_1,
-
     KEY80_LAYER_1,  KEY81_LAYER_1,  KEY82_LAYER_1,
+
+    KEY70_LAYER_1,  KEY71_LAYER_1,  KEY72_LAYER_1,  KEY73,
 
     KEY90_LAYER_1,  KEY91_LAYER_1,  KEY92_LAYER_1,
 
