@@ -5,7 +5,6 @@ config LIB_BT_CONNECT
     select BT
     select BT_SMP
     select BT_BONDABLE
-    select BT_PRIVACY
     select BT_PERIPHERAL
     select BT_DIS
     select BT_BAS

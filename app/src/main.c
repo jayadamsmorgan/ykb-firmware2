@@ -20,14 +20,14 @@
 LOG_MODULE_REGISTER(main, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
 
 #define KB_THREAD_STACK_SIZE 4096
-#define KB_THREAD_PRIO K_PRIO_PREEMPT(5)
+#define KB_THREAD_PRIO K_PRIO_PREEMPT(15)
 
 static K_THREAD_STACK_DEFINE(kb_thread_stack, KB_THREAD_STACK_SIZE);
 static struct k_thread kb_thread_data;
 
 #if CONFIG_KB_BACKLIGHT
 #define KB_BL_THREAD_STACK_SIZE 8192
-#define KB_BL_THREAD_PRIO K_PRIO_PREEMPT(5)
+#define KB_BL_THREAD_PRIO K_PRIO_PREEMPT(15)
 
 static K_THREAD_STACK_DEFINE(kb_bl_thread_stack, KB_BL_THREAD_STACK_SIZE);
 static struct k_thread kb_bl_thread_data;
@@ -70,12 +70,12 @@ int main(void) {
 #endif // CONFIG_LIB_USB_CONNECT
 
 #if CONFIG_LIB_BT_CONNECT
-    // ret = bt_connect_init();
-    // if (ret) {
-    //     LOG_ERR("BTConnect init error: %d", ret);
-    //     return 0;
-    // }
-    // LOG_DBG("BTConnect is ready!");
+    ret = bt_connect_init();
+    if (ret) {
+        LOG_ERR("BTConnect init error: %d", ret);
+        return 0;
+    }
+    LOG_DBG("BTConnect is ready!");
 #endif // CONFIG_LIB_BT_CONNECT
 
     ret = kb_settings_init();
