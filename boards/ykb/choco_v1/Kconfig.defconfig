@@ -21,6 +21,7 @@ if BOARD_CHOCO_V1
     endif # BT_INTER_KB_COMM_MASTER
     
     if BT_INTER_KB_COMM_SLAVE
+
         config BT_GAP_PERIPHERAL_PREF_PARAMS
             default y
         
@@ -35,7 +36,8 @@ if BOARD_CHOCO_V1
         
         config BT_PERIPHERAL_PREF_TIMEOUT
             default 400
-    endif
+
+    endif # BT_INTER_KB_COMM_SLAVE
     
     if YKB_USB_ENABLED
 
