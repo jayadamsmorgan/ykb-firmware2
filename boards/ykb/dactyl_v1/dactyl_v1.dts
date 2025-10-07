@@ -146,20 +146,31 @@
 };
 
 &clk48 {
-	/* Node is disabled by default as default source is HSI48 */
-	/* To select another clock, enable the node */
 	clocks = <&rcc STM32_SRC_HSI48 CLK48_SEL(0)>;
+    status = "okay";
+};
+
+&pll {
+    status = "okay";
+    clocks = <&clk_hse>;
+    div-m = <2>;
+    mul-n = <8>;
+    div-r = <2>;
+    div-q = <2>;
+    div-p = <2>;
 };
 
 &ble_rf {
+    clocks = <&rcc STM32_CLOCK(AHB3, 20)>,
+             <&rcc STM32_SRC_LSE RFWKP_SEL(1)>;
     status = "okay";
 };
 
 &rcc {
-	clocks = <&clk_hse>;
-	clock-frequency = <DT_FREQ_M(32)>;
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(64)>;
 	cpu1-prescaler = <1>;
-	cpu2-prescaler = <1>;
+	cpu2-prescaler = <2>;
 	ahb4-prescaler = <1>;
 	apb1-prescaler = <1>;
 	apb2-prescaler = <1>;
@@ -175,7 +186,7 @@
 
 &rtc {
 	clocks = <&rcc STM32_CLOCK(APB1, 10)>,
-		 <&rcc STM32_SRC_LSI RTC_SEL(2)>;
+		 <&rcc STM32_SRC_LSE RTC_SEL(2)>;
 	status = "okay";
 
 	backup_regs {
@@ -274,13 +285,6 @@ zephyr_udc0: &usb {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
-
-		/*
-		 * Configure partitions while leaving space for M0 BLE f/w
-		 * Since STM32WBCube release V1.13.2, only _HCIOnly_ f/w are supported.
-		 * These FW are expected to be located not before 0x080DB000
-		 * Current partition is using the first 876K of the flash for M4
-		 */
 
 		boot_partition: partition@0 {
 			label = "mcuboot";
