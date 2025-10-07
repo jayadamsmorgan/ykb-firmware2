@@ -49,6 +49,23 @@ static inline void for_each_set_bit(uint32_t word, uint16_t base,
     }
 }
 
+static void process_fn_buff() {
+    if (fn_buff_size == 0)
+        return;
+
+    STRUCT_SECTION_FOREACH(kb_fn_keystroke, keystroke) {
+
+        if (keystroke->count != fn_buff_size)
+            continue;
+
+        if (strncmp(keystroke->keys, fn_buff, fn_buff_size) == 0) {
+            LOG_DBG("Found matching keystroke %s", keystroke->name);
+            if (keystroke->cb)
+                keystroke->cb();
+        }
+    }
+}
+
 static void on_press(uint16_t key_index, kb_settings_t *settings) {
 #if CONFIG_KB_BACKLIGHT
     kb_key_t key = {
@@ -67,6 +84,7 @@ static void on_press(uint16_t key_index, kb_settings_t *settings) {
     if (code < KEY_FN) {
         if (fn_pressed && fn_buff_size < CONFIG_KB_FN_KEYSTROKE_MAX_KEYS) {
             fn_buff[fn_buff_size++] = code;
+            process_fn_buff();
         } else if (layer_select && code >= KEY_1_EXCLAMATION &&
                    code <= KEY_0_RPAREN) {
             uint8_t layer_index = code - KEY_1_EXCLAMATION;
@@ -146,23 +164,6 @@ static void on_release(uint16_t key_index, kb_settings_t *settings) {
             fn_buff[j - 1] = fn_buff[j];
         }
         fn_buff_size--;
-    }
-}
-
-static void process_fn_buff() {
-    if (fn_buff_size == 0)
-        return;
-
-    STRUCT_SECTION_FOREACH(kb_fn_keystroke, keystroke) {
-
-        if (keystroke->count != fn_buff_size)
-            continue;
-
-        if (strncmp(keystroke->keys, fn_buff, fn_buff_size) == 0) {
-            LOG_DBG("Found matching keystroke %s", keystroke->name);
-            if (keystroke->cb)
-                keystroke->cb();
-        }
     }
 }
 
@@ -250,7 +251,6 @@ void kb_handle() {
     memcpy(prev_down, curr_down, sizeof(prev_down));
 
     if (fn_pressed) {
-        process_fn_buff();
         return;
     }
 
