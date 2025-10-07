@@ -32,11 +32,13 @@ static uint32_t prev_down[KB_BITMAP_WORDS];
 static const uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
                                         0x10, 0x20, 0x40, 0x80};
 
-bool layer_select = false;
-bool fn_pressed = false;
+static bool layer_select = false;
+static bool fn_pressed = false;
 
-uint8_t fn_buff[CONFIG_KB_FN_KEYSTROKE_MAX_KEYS] = {0};
-uint8_t fn_buff_size = 0;
+static uint8_t fn_buff[CONFIG_KB_FN_KEYSTROKE_MAX_KEYS] = {0};
+static uint8_t fn_buff_size = 0;
+
+static uint16_t values[CONFIG_KB_KEY_COUNT] = {0};
 
 static inline void for_each_set_bit(uint32_t word, uint16_t base,
                                     void (*fn)(uint16_t idx,
@@ -66,12 +68,24 @@ static void process_fn_buff() {
     }
 }
 
+#if CONFIG_KB_BACKLIGHT
+
+static uint8_t key_percentage(kb_settings_t *settings, uint8_t key_index) {
+    uint16_t max = settings->maximums[key_index];
+    uint16_t min = settings->minimums[key_index];
+    double percentage = (double)(values[key_index] - min) / (max - min) * 100;
+    LOG_DBG("Key percentage: %f", percentage);
+    return (uint8_t)percentage;
+}
+
+#endif // CONFIG_KB_BACKLIGHT
+
 static void on_press(uint16_t key_index, kb_settings_t *settings) {
 #if CONFIG_KB_BACKLIGHT
     kb_key_t key = {
         .index = key_index,
         .pressed = true,
-        .value = 100, // TODO
+        .value = key_percentage(settings, key_index),
     };
     kb_backlight_on_event(&key);
 #endif // CONFIG_KB_BACKLIGHT
@@ -211,7 +225,7 @@ void kb_handle() {
 
     switch (settings->mode) {
     case KB_MODE_NORMAL: {
-        n = kscan_poll_normal(kscan, keys, settings->key_thresholds);
+        n = kscan_poll_normal(kscan, keys, settings->key_thresholds, values);
         if (n < 0) {
             LOG_ERR("Unable to poll normal: %d", n);
             return;
@@ -219,7 +233,7 @@ void kb_handle() {
         break;
     }
     case KB_MODE_RACE: {
-        int res = kscan_poll_race(kscan, settings->key_thresholds);
+        int res = kscan_poll_race(kscan, settings->key_thresholds, values);
         if (res < 0) {
             LOG_ERR("Unable to poll race: %d", res);
             return;

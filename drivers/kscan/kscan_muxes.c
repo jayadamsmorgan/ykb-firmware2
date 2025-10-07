@@ -50,8 +50,8 @@ static bool kscan_key_pressed_by_threshold(const struct adc_dt_spec *spec,
 }
 
 static int kscan_muxes_poll_normal(const struct device *dev,
-                                   uint8_t *pressed_keys,
-                                   uint16_t *thresholds) {
+                                   uint8_t *pressed_keys, uint16_t *thresholds,
+                                   uint16_t *values) {
     const struct kscan_muxes_config *cfg = dev->config;
     int err, ch_cnt;
     uint8_t key_index = 0;
@@ -73,13 +73,17 @@ static int kscan_muxes_poll_normal(const struct device *dev,
                         mux->name, err);
                 return -2;
             }
-            if (kscan_key_pressed_by_threshold(spec, NULL,
+            uint16_t val;
+            if (kscan_key_pressed_by_threshold(spec, &val,
                                                thresholds[key_index])) {
                 pressed_keys[pressed_count] = key_index;
                 pressed_count++;
                 if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
                     return pressed_count;
                 }
+            }
+            if (values) {
+                values[key_index] = val;
             }
             key_index++;
         }
@@ -88,8 +92,8 @@ static int kscan_muxes_poll_normal(const struct device *dev,
     return pressed_count;
 }
 
-static int kscan_muxes_poll_race(const struct device *dev,
-                                 uint16_t *thresholds) {
+static int kscan_muxes_poll_race(const struct device *dev, uint16_t *thresholds,
+                                 uint16_t *values) {
     const struct kscan_muxes_config *cfg = dev->config;
     int err, ch_cnt;
     int max_val = 0;
@@ -113,6 +117,9 @@ static int kscan_muxes_poll_race(const struct device *dev,
                     max_val = value;
                     pressed_index = index;
                 }
+            }
+            if (values) {
+                values[index] = value;
             }
             err = mux_select_next(dev);
             if (err) {

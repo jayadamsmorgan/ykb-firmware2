@@ -54,7 +54,7 @@ static bool kscan_key_pressed_by_threshold(const struct adc_dt_spec *spec,
 
 static int kscan_enables_poll_normal(const struct device *dev,
                                      uint8_t *pressed_keys,
-                                     uint16_t *thresholds) {
+                                     uint16_t *thresholds, uint16_t *values) {
     const struct kscan_enables_config *cfg = dev->config;
     int err;
     uint8_t key_index = 0;
@@ -69,7 +69,8 @@ static int kscan_enables_poll_normal(const struct device *dev,
 
             k_sleep(K_MSEC(1));
 
-            if (kscan_key_pressed_by_threshold(adc_spec, NULL,
+            uint16_t val;
+            if (kscan_key_pressed_by_threshold(adc_spec, &val,
                                                thresholds[key_index])) {
                 pressed_keys[pressed_count] = key_index;
                 pressed_count++;
@@ -79,6 +80,9 @@ static int kscan_enables_poll_normal(const struct device *dev,
                         goto gpio_set_err;
                     return pressed_count;
                 }
+            }
+            if (values) {
+                values[key_index] = val;
             }
 
             err = gpio_pin_set_dt(&cfg->gpios[key_index], 0);
@@ -97,7 +101,7 @@ gpio_set_err:
 }
 
 static int kscan_enables_poll_race(const struct device *dev,
-                                   uint16_t *thresholds) {
+                                   uint16_t *thresholds, uint16_t *values) {
     const struct kscan_enables_config *cfg = dev->config;
     int err;
     int max_val = 0;
@@ -118,6 +122,9 @@ static int kscan_enables_poll_race(const struct device *dev,
                     max_val = value;
                     pressed_index = key_index;
                 }
+            }
+            if (values) {
+                values[key_index] = value;
             }
 
             err = gpio_pin_set_dt(&cfg->gpios[key_index], 0);
