@@ -41,13 +41,19 @@ static struct bt_gatt_subscribe_params sub_params;
 
 static uint8_t slave_report[BT_CONNECT_HID_REPORT_COUNT] = {0};
 
+static uint16_t ykb_start_handle, ykb_end_handle;
+static uint16_t ykb_value_handle, ykb_ccc_handle;
+
 static uint8_t ykb_notify_cb(struct bt_conn *conn,
                              struct bt_gatt_subscribe_params *params,
                              const void *data, uint16_t len) {
 
-    LOG_INF("Receive slave message");
     if (!data)
         return BT_GATT_ITER_STOP;
+
+    if (len != 8) {
+        return BT_GATT_ITER_CONTINUE;
+    }
 
     memcpy(slave_report, data, 8);
 
@@ -58,37 +64,51 @@ static uint8_t ykb_discover_func(struct bt_conn *conn,
                                  const struct bt_gatt_attr *attr,
                                  struct bt_gatt_discover_params *params) {
     if (!attr) {
-        LOG_INF("Stop discovering");
+        LOG_WRN("Discovery finished with no match (type=%u)", params->type);
         return BT_GATT_ITER_STOP;
     }
 
-    LOG_INF("Trying to discover");
-
     switch (params->type) {
     case BT_GATT_DISCOVER_PRIMARY: {
+        const struct bt_gatt_service_val *prim = attr->user_data;
+        ykb_start_handle = attr->handle + 1;
+        ykb_end_handle = prim->end_handle;
+
         disc_params.uuid = &YKB_KEYS_CHRC_UUID.uuid;
-        disc_params.start_handle = attr->handle + 1;
-        disc_params.end_handle = 0xFFFF;
+        disc_params.start_handle = ykb_start_handle;
+        disc_params.end_handle = ykb_end_handle;
         disc_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
-        LOG_INF("Trying to bt_gatt_discover");
         bt_gatt_discover(conn, &disc_params);
-        break;
+        return BT_GATT_ITER_STOP;
     }
     case BT_GATT_DISCOVER_CHARACTERISTIC: {
         const struct bt_gatt_chrc *chrc = attr->user_data;
-        sub_params.value_handle = chrc->value_handle;
-        sub_params.notify = ykb_notify_cb;
+        ykb_value_handle = chrc->value_handle;
+
+        disc_params.uuid = BT_UUID_GATT_CCC;
+        disc_params.start_handle = ykb_value_handle + 1;
+        disc_params.end_handle = ykb_end_handle;
+        disc_params.type = BT_GATT_DISCOVER_DESCRIPTOR;
+        bt_gatt_discover(conn, &disc_params);
+        return BT_GATT_ITER_STOP;
+    }
+    case BT_GATT_DISCOVER_DESCRIPTOR: {
+        ykb_ccc_handle = attr->handle;
+
+        memset(&sub_params, 0, sizeof(sub_params));
+        sub_params.ccc_handle = ykb_ccc_handle;
+        sub_params.value_handle = ykb_value_handle;
         sub_params.value = BT_GATT_CCC_NOTIFY;
-        sub_params.ccc_handle = 0;
-        LOG_INF("Trying to bt_gatt_subscribe");
+        sub_params.notify = ykb_notify_cb;
+
         int rc = bt_gatt_subscribe(conn, &sub_params);
-        LOG_INF("bt_gatt_subscribe rc=%d", rc);
+        LOG_INF("bt_gatt_subscribe rc=%d (val=%u, ccc=%u)", rc,
+                ykb_value_handle, ykb_ccc_handle);
         return BT_GATT_ITER_STOP;
     }
     default:
         return BT_GATT_ITER_STOP;
     }
-    return BT_GATT_ITER_STOP;
 }
 
 static void ykb_start_discovery(struct bt_conn *conn) {
@@ -102,8 +122,6 @@ static void ykb_start_discovery(struct bt_conn *conn) {
 
 static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
                              uint8_t adv_type, struct net_buf_simple *ad) {
-
-    LOG_INF("Found some BT device");
 
     if (!adv_has_split_uuid(ad))
         return;
@@ -223,8 +241,6 @@ void ykb_master_link_start() {
 
 void ykb_master_link_stop() {
     bt_le_scan_stop();
-    if (ykb_slave_conn) {
-    }
 }
 
 void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],

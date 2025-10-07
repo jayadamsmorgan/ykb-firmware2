@@ -205,8 +205,6 @@ void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                      uint8_t report_size) {
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
     if (ykb_slave_is_connected()) {
-
-        LOG_INF("Slave is BLE connected sending ");
         ykb_slave_send_keys(report);
     } else {
         bt_gatt_notify(NULL, &hog_svc.attrs[6], report,

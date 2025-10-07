@@ -56,7 +56,17 @@ bool ykb_slave_is_connected() {
     return ykb_master_conn && ykb_ccc_enabled;
 }
 
+static const struct bt_gatt_attr *ykb_val = &ykb_split_svc.attrs[2]; // value
+
 void ykb_slave_send_keys(const uint8_t data[8]) {
-    LOG_INF("Sending keys!");
-    bt_gatt_notify(ykb_master_conn, &ykb_split_svc.attrs[1], data, 8);
+    if (!ykb_master_conn) {
+        return;
+    }
+    if (!bt_gatt_is_subscribed(ykb_master_conn, ykb_val, BT_GATT_CCC_NOTIFY)) {
+        return;
+    }
+    int rc = bt_gatt_notify(ykb_master_conn, ykb_val, data, 8);
+    if (rc) {
+        LOG_ERR("bt_gatt_notify rc=%d", rc);
+    }
 }
