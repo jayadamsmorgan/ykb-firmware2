@@ -134,8 +134,8 @@ static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
     LOG_INF("First time keyboard registration");
 
     struct bt_le_conn_param conn_param = {
-        .interval_min = 24,
-        .interval_max = 40,
+        .interval_min = 6,
+        .interval_max = 12,
         .latency = 0,
         .timeout = 400,
     };
