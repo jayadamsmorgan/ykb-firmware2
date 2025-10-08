@@ -40,13 +40,10 @@ static bool kscan_key_pressed_by_threshold(const struct adc_dt_spec *spec,
                                            uint16_t *value,
                                            uint16_t threshold) {
     uint16_t val = read_io_channel(spec);
-    if (val < threshold) {
-        return false;
-    }
     if (value) {
         *value = val;
     }
-    return true;
+    return val >= threshold;
 }
 
 static int kscan_muxes_poll_normal(const struct device *dev,
@@ -73,7 +70,7 @@ static int kscan_muxes_poll_normal(const struct device *dev,
                         mux->name, err);
                 return -2;
             }
-            uint16_t val;
+            uint16_t val = 0;
             if (kscan_key_pressed_by_threshold(spec, &val,
                                                thresholds[key_index])) {
                 pressed_keys[pressed_count] = key_index;
@@ -110,7 +107,7 @@ static int kscan_muxes_poll_race(const struct device *dev, uint16_t *thresholds,
             return -2;
         }
         for (int j = 0; j < ch_cnt; ++j) {
-            uint16_t value;
+            uint16_t value = 0;
             if (kscan_key_pressed_by_threshold(spec, &value,
                                                thresholds[index])) {
                 if (max_val < value) {

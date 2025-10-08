@@ -43,13 +43,10 @@ static bool kscan_key_pressed_by_threshold(const struct adc_dt_spec *spec,
                                            uint16_t *value,
                                            uint16_t threshold) {
     uint16_t val = read_io_channel(spec);
-    if (val < threshold) {
-        return false;
-    }
     if (value) {
         *value = val;
     }
-    return true;
+    return val >= threshold;
 }
 
 static int kscan_enables_poll_normal(const struct device *dev,
@@ -69,7 +66,7 @@ static int kscan_enables_poll_normal(const struct device *dev,
 
             k_sleep(K_MSEC(1));
 
-            uint16_t val;
+            uint16_t val = 0;
             if (kscan_key_pressed_by_threshold(adc_spec, &val,
                                                thresholds[key_index])) {
                 pressed_keys[pressed_count] = key_index;
@@ -115,7 +112,7 @@ static int kscan_enables_poll_race(const struct device *dev,
             if (err)
                 goto gpio_set_err;
 
-            uint16_t value;
+            uint16_t value = 0;
             if (kscan_key_pressed_by_threshold(spec, &value,
                                                thresholds[key_index])) {
                 if (max_val < value) {

@@ -73,8 +73,7 @@ static void process_fn_buff() {
 static uint8_t key_percentage(kb_settings_t *settings, uint8_t key_index) {
     uint16_t max = settings->maximums[key_index];
     uint16_t min = settings->minimums[key_index];
-    double percentage = (double)(values[key_index] - min) / (max - min) * 100;
-    LOG_DBG("Key percentage: %f", percentage);
+    uint16_t percentage = (values[key_index] - min) * 100 / (max - min);
     return (uint8_t)percentage;
 }
 
