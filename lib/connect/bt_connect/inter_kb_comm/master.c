@@ -159,6 +159,21 @@ static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
         return;
     }
 
+    if (conn_info.role == BT_CONN_ROLE_CENTRAL) {
+        const struct bt_conn_le_info *le = &conn_info.le;
+        /* interval units are 1.25ms; timeout units are 10ms */
+        LOG_INF("CENTRAL link params: interval=%u*1.25ms (~%u ms) latency=%u "
+                "timeout=%u*10ms",
+                le->interval, le->interval * 125 / 100, le->latency,
+                le->timeout);
+    } else {
+        const struct bt_conn_le_info *le = &conn_info.le;
+        LOG_INF("PERIPHERAL link params: interval=%u*1.25ms (~%u ms) "
+                "latency=%u timeout=%u*10ms",
+                le->interval, le->interval * 125 / 100, le->latency,
+                le->timeout);
+    }
+
     if (conn_info.role != BT_CONN_ROLE_CENTRAL) {
 
         if (err) {
@@ -172,6 +187,13 @@ static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
         if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
             LOG_ERR("Failed to set security");
         }
+        static const struct bt_le_conn_param fast = {
+            .interval_min = 6,
+            .interval_max = 12,
+            .latency = 0,
+            .timeout = 400,
+        };
+        bt_conn_le_param_update(conn, &fast);
 
         return;
     }
