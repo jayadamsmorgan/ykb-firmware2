@@ -6,21 +6,17 @@ if BOARD_DACTYL_V1
 
     if BT_INTER_KB_COMM_MASTER
 
-        config BT_CENTRAL
+        config BT_PERIPHERAL
             default y
 
-        config BT_GATT_CLIENT
+        config BT_DIS
             default y
 
-        config BT_FILTER_ACCEPT_LIST
+        config BT_BAS
             default y
 
-        config BT_SCAN_WITH_IDENTITY
+        config BT_BAS_BLS
             default y
-
-    endif # BT_INTER_KB_COMM_MASTER
-
-    if BT_INTER_KB_COMM_SLAVE
 
         config BT_GAP_PERIPHERAL_PREF_PARAMS
             default y
@@ -36,6 +32,22 @@ if BOARD_DACTYL_V1
         
         config BT_PERIPHERAL_PREF_TIMEOUT
             default 400
+
+    endif # BT_INTER_KB_COMM_MASTER
+
+    if BT_INTER_KB_COMM_SLAVE
+
+        config BT_CENTRAL
+            default y
+
+        config BT_GATT_CLIENT
+            default y
+
+        config BT_FILTER_ACCEPT_LIST
+            default y
+
+        config BT_SCAN_WITH_IDENTITY
+            default y
 
     endif # BT_INTER_KB_COMM_SLAVE
 

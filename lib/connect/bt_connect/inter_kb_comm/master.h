@@ -3,9 +3,7 @@
 
 #include <lib/connect/bt_connect.h>
 
-void ykb_master_link_start();
-
-void ykb_master_link_stop();
+int ykb_master_state_notify(const uint8_t payload[8]);
 
 void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                               uint8_t report_count);

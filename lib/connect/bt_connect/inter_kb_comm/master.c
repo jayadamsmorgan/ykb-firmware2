@@ -1,6 +1,6 @@
-#include "master.h"
-
 #include "inter_kb_comm.h"
+
+#include <lib/connect/bt_connect.h>
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -9,275 +9,181 @@
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/uuid.h>
 
+#include <string.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
-static struct bt_conn *ykb_slave_conn;
+/* --- Master’s YKB Split Service (Peripheral) ---
+ *
+ * - KEYS_RX (UUID ...0002): Write Without Response (8 bytes)
+ *   Slave (central) sends its HID 8-byte report here.
+ *
+ * - STATE_TX (UUID ...0003): Notify (8 bytes)
+ *   Master notifies LED/mode info down to slave.
+ */
 
-static bool uuid_match_cb(struct bt_data *data, void *user_data) {
-    if (data->type == BT_DATA_UUID128_ALL ||
-        data->type == BT_DATA_UUID128_SOME) {
-        if (data->data_len % 16 == 0) {
-            for (int i = 0; i < data->data_len; i += 16) {
-                if (!memcmp(&data->data[i], ykb_svc_uuid_le, 16)) {
-                    *(bool *)user_data = true;
-                    return false; // stop parsing on match
+static uint8_t last_slave_report[8];
+static uint8_t state_tx_value[8];
+
+static ssize_t keys_rx_write(struct bt_conn *conn,
+                             const struct bt_gatt_attr *attr, const void *buf,
+                             uint16_t len, uint16_t offset, uint8_t flags) {
+    if (offset != 0 || len != 8) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+    }
+
+    memcpy(last_slave_report, buf, 8);
+
+    /* If you want immediate host update from here, you can trigger a work item
+     * that reads local keys, merges, and calls bt_gatt_notify() on the HID
+     * char. For now, bt_connect_send() will call ykb_master_merge_reports()
+     * when sending.
+     */
+    return len;
+}
+
+static void state_ccc_cfg_changed(const struct bt_gatt_attr *attr,
+                                  uint16_t value) {
+    /* Optional: you can track whether the slave subscribed to STATE_TX here */
+    LOG_INF("Slave %s STATE_TX notifications",
+            (value == BT_GATT_CCC_NOTIFY) ? "enabled" : "disabled");
+}
+
+/* Attribute layout:
+ * 0: Primary Service
+ * 1: Char Decl (KEYS_RX)
+ * 2: Char Value (KEYS_RX)
+ * 3: Char Decl (STATE_TX)
+ * 4: Char Value (STATE_TX)
+ * 5: CCC for STATE_TX
+ */
+BT_GATT_SERVICE_DEFINE(
+    ykb_split_svc, BT_GATT_PRIMARY_SERVICE(&YKB_SPLIT_SVC_UUID),
+
+    /* KEYS_RX: central writes 8B to us (Write Without Response) */
+    BT_GATT_CHARACTERISTIC(&YKB_KEYS_RX_UUID.uuid,
+                           BT_GATT_CHRC_WRITE_WITHOUT_RESP, BT_GATT_PERM_WRITE,
+                           NULL, keys_rx_write, NULL),
+
+    /* STATE_TX: we notify slave (8B payload) */
+    BT_GATT_CHARACTERISTIC(&YKB_STATE_TX_UUID.uuid, BT_GATT_CHRC_NOTIFY,
+                           BT_GATT_PERM_NONE, NULL, NULL, state_tx_value),
+    BT_GATT_CCC(state_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
+
+/* Push state (e.g., LED/CapsLock) down to slave (optional helper) */
+int ykb_master_state_notify(const uint8_t payload[8]) {
+    memcpy(state_tx_value, payload, 8);
+    /* value handle for STATE_TX is ykb_split_svc.attrs[4] */
+    return bt_gatt_notify(NULL, &ykb_split_svc.attrs[4], state_tx_value, 8);
+}
+
+/* Merge the slave’s last 8-byte report into 'report' (local) before sending to
+ * host */
+void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
+                              uint8_t report_size) {
+    /* OR in modifier byte */
+    report[0] |= last_slave_report[0];
+
+    /* If NKRO isn't used, fill empty slots with slave keycodes (2..7) */
+    if (report_size == 6) {
+        return; /* 6 = only modifiers + 6 keys already in use by your local half
+                 */
+    }
+
+    uint8_t j = 2;
+    for (uint8_t i = report_size + 2; i < 8; ++i) {
+        if (report[i] == 0) {
+            if (last_slave_report[j] == 0)
+                break;
+            /* Avoid duplicates */
+            bool dup = false;
+            for (uint8_t k = 2; k < 8; ++k) {
+                if (report[k] == last_slave_report[j]) {
+                    dup = true;
+                    break;
                 }
             }
+            if (!dup) {
+                report[i] = last_slave_report[j];
+            }
+            j++;
+            if (j >= 8)
+                break;
         }
     }
-    return true; // continue parsing
 }
 
-static bool adv_has_split_uuid(struct net_buf_simple *ad) {
-    bool found = false;
-    bt_data_parse(ad, uuid_match_cb, &found);
-    return found;
-}
+#include <stdatomic.h>
 
-static struct bt_gatt_discover_params disc_params;
-static struct bt_gatt_subscribe_params sub_params;
+static atomic_t periph_conn_count = ATOMIC_INIT(0);
 
-static uint8_t slave_report[BT_CONNECT_HID_REPORT_COUNT] = {0};
-
-static uint16_t ykb_start_handle, ykb_end_handle;
-static uint16_t ykb_value_handle, ykb_ccc_handle;
-
-static uint8_t ykb_notify_cb(struct bt_conn *conn,
-                             struct bt_gatt_subscribe_params *params,
-                             const void *data, uint16_t len) {
-
-    if (!data)
-        return BT_GATT_ITER_STOP;
-
-    if (len != 8) {
-        return BT_GATT_ITER_CONTINUE;
-    }
-
-    memcpy(slave_report, data, 8);
-
-    return BT_GATT_ITER_CONTINUE;
-}
-
-static uint8_t ykb_discover_func(struct bt_conn *conn,
-                                 const struct bt_gatt_attr *attr,
-                                 struct bt_gatt_discover_params *params) {
-    if (!attr) {
-        LOG_WRN("Discovery finished with no match (type=%u)", params->type);
-        return BT_GATT_ITER_STOP;
-    }
-
-    switch (params->type) {
-    case BT_GATT_DISCOVER_PRIMARY: {
-        const struct bt_gatt_service_val *prim = attr->user_data;
-        ykb_start_handle = attr->handle + 1;
-        ykb_end_handle = prim->end_handle;
-
-        disc_params.uuid = &YKB_KEYS_CHRC_UUID.uuid;
-        disc_params.start_handle = ykb_start_handle;
-        disc_params.end_handle = ykb_end_handle;
-        disc_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
-        bt_gatt_discover(conn, &disc_params);
-        return BT_GATT_ITER_STOP;
-    }
-    case BT_GATT_DISCOVER_CHARACTERISTIC: {
-        const struct bt_gatt_chrc *chrc = attr->user_data;
-        ykb_value_handle = chrc->value_handle;
-
-        disc_params.uuid = BT_UUID_GATT_CCC;
-        disc_params.start_handle = ykb_value_handle + 1;
-        disc_params.end_handle = ykb_end_handle;
-        disc_params.type = BT_GATT_DISCOVER_DESCRIPTOR;
-        bt_gatt_discover(conn, &disc_params);
-        return BT_GATT_ITER_STOP;
-    }
-    case BT_GATT_DISCOVER_DESCRIPTOR: {
-        ykb_ccc_handle = attr->handle;
-
-        memset(&sub_params, 0, sizeof(sub_params));
-        sub_params.ccc_handle = ykb_ccc_handle;
-        sub_params.value_handle = ykb_value_handle;
-        sub_params.value = BT_GATT_CCC_NOTIFY;
-        sub_params.notify = ykb_notify_cb;
-
-        int rc = bt_gatt_subscribe(conn, &sub_params);
-        LOG_INF("bt_gatt_subscribe rc=%d (val=%u, ccc=%u)", rc,
-                ykb_value_handle, ykb_ccc_handle);
-        return BT_GATT_ITER_STOP;
-    }
-    default:
-        return BT_GATT_ITER_STOP;
-    }
-}
-
-static void ykb_start_discovery(struct bt_conn *conn) {
-    disc_params.uuid = &YKB_SPLIT_SVC_UUID.uuid;
-    disc_params.func = ykb_discover_func;
-    disc_params.start_handle = 0x0001;
-    disc_params.end_handle = 0xFFFF;
-    disc_params.type = BT_GATT_DISCOVER_PRIMARY;
-    bt_gatt_discover(conn, &disc_params);
-}
-
-static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
-                             uint8_t adv_type, struct net_buf_simple *ad) {
-
-    if (!adv_has_split_uuid(ad))
-        return;
-
-    LOG_INF("It is left keyboard!!!");
-
-    if (ykb_slave_conn)
-        return;
-
-    LOG_INF("First time keyboard registration");
-
-    struct bt_le_conn_param conn_param = {
-        .interval_min = 6,
-        .interval_max = 12,
-        .latency = 0,
-        .timeout = 400,
-    };
-
-    bt_le_scan_stop();
-    bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, &conn_param,
-                      &ykb_slave_conn);
-}
-
-static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
-
-    char addr[BT_ADDR_LE_STR_LEN];
-
-    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-    struct bt_conn_info conn_info;
-
-    int res = bt_conn_get_info(conn, &conn_info);
-    if (res) {
-        LOG_ERR("Unable to get connection info (err %d)", res);
-        return;
-    }
-
-    if (conn_info.role == BT_CONN_ROLE_CENTRAL) {
-        const struct bt_conn_le_info *le = &conn_info.le;
-        /* interval units are 1.25ms; timeout units are 10ms */
-        LOG_INF("CENTRAL link params: interval=%u*1.25ms (~%u ms) latency=%u "
-                "timeout=%u*10ms",
-                le->interval, le->interval * 125 / 100, le->latency,
-                le->timeout);
-    } else {
-        const struct bt_conn_le_info *le = &conn_info.le;
-        LOG_INF("PERIPHERAL link params: interval=%u*1.25ms (~%u ms) "
-                "latency=%u timeout=%u*10ms",
-                le->interval, le->interval * 125 / 100, le->latency,
-                le->timeout);
-    }
-
-    if (conn_info.role != BT_CONN_ROLE_CENTRAL) {
-
-        if (err) {
-            LOG_ERR("Failed to connect to host %s, err 0x%02x %s", addr, err,
-                    bt_hci_err_to_str(err));
-            return;
-        }
-
-        LOG_INF("Connected to host %s", addr);
-
-        if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
-            LOG_ERR("Failed to set security");
-        }
-        static const struct bt_le_conn_param fast = {
-            .interval_min = 6,
-            .interval_max = 12,
-            .latency = 0,
-            .timeout = 400,
-        };
-        bt_conn_le_param_update(conn, &fast);
-
-        return;
-    }
-
-    if (err) {
-        LOG_ERR("Peer connect failed: 0x%02x", err);
-        ykb_slave_conn = NULL;
-        bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
-        return;
-    }
-
-    LOG_INF("Peer connected");
-
-    ykb_start_discovery(conn);
-}
-
-static void ykb_master_disconnected(struct bt_conn *conn, uint8_t reason) {
-    char addr[BT_ADDR_LE_STR_LEN];
-
-    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-    LOG_ERR("Disconnected from %s, reason 0x%02x %s", addr, reason,
-            bt_hci_err_to_str(reason));
-
-    if (conn == ykb_slave_conn) {
-        bt_conn_unref(ykb_slave_conn);
-        ykb_slave_conn = NULL;
-        LOG_WRN("Peer disconnected, rescanning...");
-        bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
-        return;
-    }
-
-    if (reason == BT_HCI_ERR_REMOTE_USER_TERM_CONN) {
-        int res = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
-        if (res) {
-            LOG_ERR("Unable to unpair device %s (err %d)", addr, res);
-            return;
-        }
-        LOG_INF("Unpaired device %s", addr);
-    }
-}
-
-static void security_changed(struct bt_conn *conn, bt_security_t level,
-                             enum bt_security_err err) {
-    char addr[BT_ADDR_LE_STR_LEN];
-
-    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-    if (!err) {
-        LOG_INF("Security changed: %s level %u", addr, level);
-    } else {
-        LOG_ERR("Security failed: %s level %u err %s(%d)", addr, level,
-                bt_security_err_to_str(err), err);
-    }
-}
-
-BT_CONN_CB_DEFINE(ykb_peer_cb) = {
-    .connected = ykb_master_connected,
-    .disconnected = ykb_master_disconnected,
-    .security_changed = security_changed,
+static const struct bt_data ad[] = {
+    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xC1, 0x03),
+    BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
+                  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)),
+    /* Master exposes the split service as a peripheral for the slave (central).
+     */
+    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le, sizeof(ykb_svc_uuid_le)),
 };
 
-void ykb_master_link_start() {
-    int err = bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
-    LOG_INF("Scan start with code: %d", err);
-}
+static const struct bt_data sd[] = {
+    BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
+            sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
 
-void ykb_master_link_stop() {
-    bt_le_scan_stop();
-}
-
-void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
-                              uint8_t report_count) {
-    report[0] |= slave_report[0];
-    if (report_count == 6) {
-        return;
-    }
-    uint8_t j = 2;
-    for (uint8_t i = report_count + 2; i < 8; ++i) {
-        if (report[i] == 0) {
-            if (slave_report[j] == 0)
-                break;
-            report[i] = slave_report[j];
-            j++;
+static void try_resume_advertising(void) {
+    /* If we still have spare connection objects, resume advertising. */
+    if (atomic_get(&periph_conn_count) < CONFIG_BT_MAX_CONN) {
+        int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+                                 ARRAY_SIZE(sd));
+        if (rc && rc != -EALREADY) {
+            LOG_WRN("adv resume failed rc=%d", rc);
+        } else {
+            LOG_INF("adv resumed");
         }
     }
 }
+
+static void conn_connected(struct bt_conn *conn, uint8_t err) {
+    struct bt_conn_info info;
+    if (bt_conn_get_info(conn, &info)) {
+        return;
+    }
+
+    /* Only count when we are the peripheral on this link (host<->master,
+     * slave<->master) */
+    if (!err && info.role == BT_CONN_ROLE_PERIPHERAL) {
+        atomic_inc(&periph_conn_count);
+        /* Immediately try to resume advertising for the next central */
+        try_resume_advertising();
+    }
+}
+
+static void conn_disconnected(struct bt_conn *conn, uint8_t reason) {
+    struct bt_conn_info info;
+    if (bt_conn_get_info(conn, &info)) {
+        return;
+    }
+
+    if (info.role == BT_CONN_ROLE_PERIPHERAL) {
+        int newv =
+            atomic_sub(&periph_conn_count, 1) - 1; /* returns old value */
+        (void)newv;
+        /* After a peripheral link drops, resume advertising (if not already) */
+        try_resume_advertising();
+    }
+}
+
+/* Optional: also use .recycled to resume if we ran out of conn objects */
+static void conn_recycled(void) {
+    try_resume_advertising();
+}
+
+BT_CONN_CB_DEFINE(periph_adv_cb) = {
+    .connected = conn_connected,
+    .disconnected = conn_disconnected,
+    .recycled =
+        conn_recycled, /* requires a Zephyr version that supports .recycled */
+};
