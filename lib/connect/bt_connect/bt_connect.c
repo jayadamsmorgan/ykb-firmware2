@@ -119,17 +119,7 @@ static void bt_ready(int err) {
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER
 
-    // LOG_INF("L2CAP Server init successfully");
-
-    err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
-                          ARRAY_SIZE(sd));
-
-    if (err) {
-        LOG_ERR("Advertising failed to start (err %d)", err);
-        return;
-    }
-
-    LOG_INF("Advertising successfully started");
+    ykb_master_link_start();
 
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
 
@@ -183,6 +173,8 @@ void bt_connect_factory_reset() {
 
 void bt_connect_start_advertising() {
 
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+
     int err = bt_le_adv_stop();
     if (err) {
         LOG_WRN("Unable to stop advertising (err %d)", err);
@@ -194,6 +186,8 @@ void bt_connect_start_advertising() {
     if (err) {
         LOG_ERR("Advertising failed to start (err %d)", err);
     }
+
+#endif // CONFIG_BT_INTER_KB_COMM_SLAVE
 }
 
 BT_GATT_SERVICE_DEFINE(

@@ -31,25 +31,6 @@ static void start_advertising(void) {
     }
 }
 
-static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
-
-    char addr[BT_ADDR_LE_STR_LEN];
-
-    // Get information about central device
-    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-    struct bt_conn_info conn_info;
-
-    int res = bt_conn_get_info(conn, &conn_info);
-    if (res) {
-        LOG_ERR("Unable to get connection info (err %d)", res);
-        return;
-    }
-
-    // Check if it slave or not
-    // if not, we consider it a host
-}
-
 static void ykb_master_disconnected(struct bt_conn *conn, uint8_t reason) {
     char addr[BT_ADDR_LE_STR_LEN];
 }
@@ -66,12 +47,6 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
                 bt_security_err_to_str(err), err);
     }
 }
-
-BT_CONN_CB_DEFINE(ykb_master_conn_callbacks) = {
-    .connected = ykb_master_connected,
-    .disconnected = ykb_master_disconnected,
-    .security_changed = security_changed,
-};
 
 /*-------------L2CAP--------------------*/
 
@@ -117,14 +92,19 @@ static int ykb_l2cap_accept(struct bt_conn *conn,
                             struct bt_l2cap_chan **chan) {
     // Проверяем, это ли соединение от слейва
     if (conn != slave_conn) {
-        LOG_INF("Accepting L2CAP connection (conn %p, current slave_conn %p)",
-                conn, slave_conn);
-        slave_conn =
-            bt_conn_ref(conn); // Обновляем ссылку на соединение со слейвом
+        LOG_INF("New L2CAP connection but we still have previous slave_conn");
     }
+    memset(&ykb_l2cap_slave_chan, 0, sizeof(ykb_l2cap_slave_chan));
 
-    *chan = &ykb_l2cap_slave_chan;
-    bt_l2cap_le_chan_init(&ykb_l2cap_slave_chan, &l2cap_slave_ops);
+    /* Важно: вернуть указатель на внутреннее поле .chan */
+    ykb_l2cap_slave_chan.chan.ops =
+        &l2cap_slave_ops; /* Если структура вложена: .chan.chan */
+    /* В зависимости от версии API может быть просто
+       ykb_l2cap_slave_chan.chan.ops = &...; проверь, у тебя вложенность:
+       bt_l2cap_le_chan.chan (struct bt_l2cap_chan) */
+
+    *chan = &ykb_l2cap_slave_chan.chan; /* возвращаем struct bt_l2cap_chan * */
+    LOG_INF("Channel was created");
     return 0;
 }
 
@@ -143,6 +123,30 @@ void ykb_master_l2cap_server_init(void) {
         LOG_INF("L2CAP server registered, PSM: %d", YKB_L2CAP_PSM);
     }
 }
+
+static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
+
+    char addr[BT_ADDR_LE_STR_LEN];
+
+    // Get information about central device
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+    struct bt_conn_info conn_info;
+
+    int res = bt_conn_get_info(conn, &conn_info);
+    if (res) {
+        LOG_ERR("Unable to get connection info (err %d)", res);
+        return;
+    }
+    // Check if it slave or not
+    // if not, we consider it a host
+}
+
+BT_CONN_CB_DEFINE(ykb_master_conn_callbacks) = {
+    .connected = ykb_master_connected,
+    .disconnected = ykb_master_disconnected,
+    .security_changed = security_changed,
+};
 /*-------------Other STUFF--------------------*/
 
 void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
@@ -160,4 +164,19 @@ void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
             j++;
         }
     }
+}
+
+void ykb_master_link_start() {
+
+    ykb_master_l2cap_server_init();
+
+    int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+                              ARRAY_SIZE(sd));
+
+    if (err) {
+        LOG_ERR("Advertising failed to start (err %d)", err);
+        return;
+    }
+
+    LOG_INF("Advertising successfully started");
 }

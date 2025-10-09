@@ -7,25 +7,27 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/hci.h>
-#include <zephyr/bluetooth/l2cap.h> // Добавим для L2CAP
+#include <zephyr/bluetooth/l2cap.h>
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/uuid.h>
 
 #include <zephyr/logging/log.h>
-
+#include <zephyr/sys/atomic.h>
 LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
-static uint8_t slave_report[BT_CONNECT_HID_REPORT_COUNT] = {0};
-
 static uint8_t ykb_ccc_enabled;
+
 static struct bt_conn *ykb_master_conn = NULL;
 
 static struct bt_l2cap_le_chan ykb_l2cap_master_chan;
 
+static atomic_t conn_connected = ATOMIC_INIT(0);
+static atomic_t chan_connected = ATOMIC_INIT(0);
+
 static struct bt_gatt_discover_params disc_params;
 static struct bt_gatt_subscribe_params sub_params;
 
-// ... uuid_match_cb и adv_has_split_uuid остаются для поиска мастера ...
+/* --- Central scan/connect to master ------------------------*/
 static bool uuid_match_cb(struct bt_data *data, void *user_data) {
     if (data->type == BT_DATA_UUID128_ALL ||
         data->type == BT_DATA_UUID128_SOME) {
@@ -46,19 +48,18 @@ static bool adv_has_split_uuid(struct net_buf_simple *ad) {
     bt_data_parse(ad, uuid_match_cb, &found);
     return found;
 }
-// ykb_device_found для сканирования и подключения к мастеру
 
+// ykb_device_found is for scanning for device and establishing a connection
 static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
                              uint8_t adv_type, struct net_buf_simple *ad) {
 
+    LOG_INF("Found some BT device");
+    // Check if connection have right one UUID
     if (!adv_has_split_uuid(ad)) {
-        // Опционально: можно добавить проверку MAC-адреса здесь, если
-        // используешь статический Например: if (bt_addr_le_cmp(addr,
-        // &MASTER_KNOWN_ADDR) != 0) return;
         return;
     }
 
-    // Если мастер уже подключен, или мы пытаемся подключиться
+    // Check if master already connected
     if (ykb_master_conn != NULL) {
         return;
     }
@@ -72,62 +73,56 @@ static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
         .timeout = 400,
     };
 
-    bt_le_scan_stop(); // Останавливаем сканирование, чтобы подключиться
+    bt_le_scan_stop();
     int rc = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, &conn_param,
                                &ykb_master_conn);
     if (rc) {
         LOG_ERR("Failed to create connection to master (err %d)", rc);
-        ykb_master_conn = NULL; // Обнуляем, чтобы можно было попробовать снова
-        start_scanning(); // Снова запускаем сканирование
+        ykb_master_conn = NULL;
+        start_scanning();
     }
 }
 
-// --- Вспомогательная функция для перезапуска сканирования ---
+/* --- Helper to start/restart scanning ------------------------*/
 
 void start_scanning(void) {
     int err = bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
     if (err &&
-        err != -EALREADY) { // -EALREADY означает, что сканирование уже запущено
+        err != -EALREADY) { // -EALREADY means that we are alreday scanning
         LOG_ERR("Scan failed to start (err %d)", err);
     } else if (err == 0) {
         LOG_INF("Scanning successfully (re)started");
     }
 }
 
-// --- L2CAP Callbacks для клиента ---
+// --- L2CAP Callbacks ---
 
-// При получении данных по L2CAP (если мастер будет что-то отправлять слейву)
 static int ykb_l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf) {
     LOG_DBG("Received L2CAP data from master, len: %u", buf->len);
-    // Мастер обычно не отправляет данные слейву в такой схеме,
-    // но если нужно, обрабатывать здесь.
-    net_buf_unref(buf);
+    // net_buf_unref(buf);
     return 0;
 }
 
-// L2CAP канал успешно подключен
 static void ykb_l2cap_connected(struct bt_l2cap_chan *chan) {
     LOG_INF("L2CAP channel connected to master!");
-    // Теперь мы готовы отправлять данные
 }
 
-// L2CAP канал отключен
 static void ykb_l2cap_disconnected(struct bt_l2cap_chan *chan) {
     LOG_INF("L2CAP channel disconnected from master!");
-    // L2CAP-канал разорван. Возможно, нужно разорвать и BLE-соединение,
-    // или дождаться его разрыва.
+}
+static void ykb_l2cap_sent(struct bt_l2cap_chan *chan) {
+    LOG_INF("ykb_l2cap_sended");
 }
 
 // Операции L2CAP
 static struct bt_l2cap_chan_ops l2cap_master_ops = {
+    .sent = ykb_l2cap_sent,
     .connected = ykb_l2cap_connected,
     .disconnected = ykb_l2cap_disconnected,
     .recv = ykb_l2cap_recv,
 };
 
-// --- GATT Callback (для определения того, кто подключается) ---
-// Этот колбэк больше не будет делать Discover/Subscribe,
-// а будет инициировать L2CAP-канал
+// --- Connection Callback  ---
 static void ykb_slave_connected(struct bt_conn *conn, uint8_t err) {
     char addr_str[BT_ADDR_LE_STR_LEN];
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr_str, sizeof(addr_str));
@@ -135,24 +130,19 @@ static void ykb_slave_connected(struct bt_conn *conn, uint8_t err) {
     if (err) {
         LOG_ERR("Failed to connect to master %s, err 0x%02x %s", addr_str, err,
                 bt_hci_err_to_str(err));
-        ykb_master_conn = NULL; // Сброс, если соединение не удалось
-        start_scanning(); // Перезапускаем сканирование
+        ykb_master_conn = NULL;
+        start_scanning();
         return;
     }
 
     LOG_INF("Connected to master: %s", addr_str);
-    ykb_master_conn =
-        bt_conn_ref(conn); // Сохраняем ссылку на соединение с мастером
+    ykb_master_conn = bt_conn_ref(conn);
 
-    // Инициируем L2CAP-канал к мастеру
-    // bt_l2cap_le_chan_init(&ykb_l2cap_master_chan, &l2cap_master_ops);
     int rc =
         bt_l2cap_chan_connect(conn, &ykb_l2cap_master_chan.chan, YKB_L2CAP_PSM);
     if (rc) {
         LOG_ERR("Failed to connect L2CAP channel (err %d)", rc);
-        // Если L2CAP не удалось, возможно, стоит разорвать BLE-соединение и
-        // попробовать снова.
-        bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        // bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     }
 }
 
@@ -191,9 +181,8 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     }
 }
 
-// Callbacks для Bluetooth-соединения
+// Callbacks for Bluetooth connection
 BT_CONN_CB_DEFINE(ykb_slave_conn_callbacks) = {
-    // Переименовал
     .connected = ykb_slave_connected,
     .disconnected = ykb_slave_disconnected,
     .security_changed = security_changed,
@@ -202,15 +191,11 @@ BT_CONN_CB_DEFINE(ykb_slave_conn_callbacks) = {
 // --- Slave Public API ---
 
 bool ykb_slave_is_connected() {
-    // Slave считается подключенным, если есть BLE-соединение с мастером
-    // И L2CAP-канал активен (bt_l2cap_chan_is_connected, если такая функция
-    // есть, или проверять ykb_l2cap_master_chan.chan.state)
-    return ykb_master_conn !=
-           NULL; //&&
-                 //(ykb_l2cap_master_chan.chan.state == BT_L2CAP_CONNECTED);
+    return atomic_get(&conn_connected) && atomic_get(&chan_connected);
 }
 
 void ykb_slave_send_keys(const uint8_t data[BT_CONNECT_HID_REPORT_COUNT]) {
+
     if (!ykb_slave_is_connected()) {
         LOG_WRN("Slave not connected to master, cannot send keys.");
         return;
@@ -240,7 +225,7 @@ void ykb_slave_send_keys(const uint8_t data[BT_CONNECT_HID_REPORT_COUNT]) {
 }
 
 void ykb_slave_link_start() {
-    start_scanning(); // Запускаем сканирование
+    start_scanning();
 }
 
 void ykb_slave_link_stop() {
