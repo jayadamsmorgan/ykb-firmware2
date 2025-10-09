@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+
 #define BT_CONNECT_HID_REPORT_COUNT 8
 
 int bt_connect_init();

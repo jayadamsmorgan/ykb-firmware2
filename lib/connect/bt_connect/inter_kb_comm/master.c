@@ -6,149 +6,36 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/hci.h>
+#include <zephyr/bluetooth/l2cap.h>
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/uuid.h>
-
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
-static struct bt_conn *ykb_slave_conn;
-
-static bool uuid_match_cb(struct bt_data *data, void *user_data) {
-    if (data->type == BT_DATA_UUID128_ALL ||
-        data->type == BT_DATA_UUID128_SOME) {
-        if (data->data_len % 16 == 0) {
-            for (int i = 0; i < data->data_len; i += 16) {
-                if (!memcmp(&data->data[i], ykb_svc_uuid_le, 16)) {
-                    *(bool *)user_data = true;
-                    return false; // stop parsing on match
-                }
-            }
-        }
-    }
-    return true; // continue parsing
-}
-
-static bool adv_has_split_uuid(struct net_buf_simple *ad) {
-    bool found = false;
-    bt_data_parse(ad, uuid_match_cb, &found);
-    return found;
-}
-
-static struct bt_gatt_discover_params disc_params;
-static struct bt_gatt_subscribe_params sub_params;
+static struct bt_conn *host_conn = NULL;
+static struct bt_conn *slave_conn = NULL;
 
 static uint8_t slave_report[BT_CONNECT_HID_REPORT_COUNT] = {0};
 
-static uint16_t ykb_start_handle, ykb_end_handle;
-static uint16_t ykb_value_handle, ykb_ccc_handle;
-
-static uint8_t ykb_notify_cb(struct bt_conn *conn,
-                             struct bt_gatt_subscribe_params *params,
-                             const void *data, uint16_t len) {
-
-    if (!data)
-        return BT_GATT_ITER_STOP;
-
-    if (len != 8) {
-        return BT_GATT_ITER_CONTINUE;
+static void start_advertising(void) {
+    int err;
+    err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+                          ARRAY_SIZE(sd));
+    if (err == -EALREADY) {
+        LOG_ERR("Advertising already started");
+    } else if (err) {
+        LOG_ERR("Advertising failed to start (err %d)", err);
+    } else {
+        LOG_INF("Advertising successfully (re)started");
     }
-
-    memcpy(slave_report, data, 8);
-
-    return BT_GATT_ITER_CONTINUE;
-}
-
-static uint8_t ykb_discover_func(struct bt_conn *conn,
-                                 const struct bt_gatt_attr *attr,
-                                 struct bt_gatt_discover_params *params) {
-    if (!attr) {
-        LOG_WRN("Discovery finished with no match (type=%u)", params->type);
-        return BT_GATT_ITER_STOP;
-    }
-
-    switch (params->type) {
-    case BT_GATT_DISCOVER_PRIMARY: {
-        const struct bt_gatt_service_val *prim = attr->user_data;
-        ykb_start_handle = attr->handle + 1;
-        ykb_end_handle = prim->end_handle;
-
-        disc_params.uuid = &YKB_KEYS_CHRC_UUID.uuid;
-        disc_params.start_handle = ykb_start_handle;
-        disc_params.end_handle = ykb_end_handle;
-        disc_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
-        bt_gatt_discover(conn, &disc_params);
-        return BT_GATT_ITER_STOP;
-    }
-    case BT_GATT_DISCOVER_CHARACTERISTIC: {
-        const struct bt_gatt_chrc *chrc = attr->user_data;
-        ykb_value_handle = chrc->value_handle;
-
-        disc_params.uuid = BT_UUID_GATT_CCC;
-        disc_params.start_handle = ykb_value_handle + 1;
-        disc_params.end_handle = ykb_end_handle;
-        disc_params.type = BT_GATT_DISCOVER_DESCRIPTOR;
-        bt_gatt_discover(conn, &disc_params);
-        return BT_GATT_ITER_STOP;
-    }
-    case BT_GATT_DISCOVER_DESCRIPTOR: {
-        ykb_ccc_handle = attr->handle;
-
-        memset(&sub_params, 0, sizeof(sub_params));
-        sub_params.ccc_handle = ykb_ccc_handle;
-        sub_params.value_handle = ykb_value_handle;
-        sub_params.value = BT_GATT_CCC_NOTIFY;
-        sub_params.notify = ykb_notify_cb;
-
-        int rc = bt_gatt_subscribe(conn, &sub_params);
-        LOG_INF("bt_gatt_subscribe rc=%d (val=%u, ccc=%u)", rc,
-                ykb_value_handle, ykb_ccc_handle);
-        return BT_GATT_ITER_STOP;
-    }
-    default:
-        return BT_GATT_ITER_STOP;
-    }
-}
-
-static void ykb_start_discovery(struct bt_conn *conn) {
-    disc_params.uuid = &YKB_SPLIT_SVC_UUID.uuid;
-    disc_params.func = ykb_discover_func;
-    disc_params.start_handle = 0x0001;
-    disc_params.end_handle = 0xFFFF;
-    disc_params.type = BT_GATT_DISCOVER_PRIMARY;
-    bt_gatt_discover(conn, &disc_params);
-}
-
-static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
-                             uint8_t adv_type, struct net_buf_simple *ad) {
-
-    if (!adv_has_split_uuid(ad))
-        return;
-
-    LOG_INF("It is left keyboard!!!");
-
-    if (ykb_slave_conn)
-        return;
-
-    LOG_INF("First time keyboard registration");
-
-    struct bt_le_conn_param conn_param = {
-        .interval_min = 6,
-        .interval_max = 12,
-        .latency = 0,
-        .timeout = 400,
-    };
-
-    bt_le_scan_stop();
-    bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, &conn_param,
-                      &ykb_slave_conn);
 }
 
 static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
 
     char addr[BT_ADDR_LE_STR_LEN];
 
+    // Get information about central device
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
     struct bt_conn_info conn_info;
@@ -159,65 +46,17 @@ static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
         return;
     }
 
-    if (conn_info.role != BT_CONN_ROLE_CENTRAL) {
-
-        if (err) {
-            LOG_ERR("Failed to connect to host %s, err 0x%02x %s", addr, err,
-                    bt_hci_err_to_str(err));
-            return;
-        }
-
-        LOG_INF("Connected to host %s", addr);
-
-        if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
-            LOG_ERR("Failed to set security");
-        }
-
-        return;
-    }
-
-    if (err) {
-        LOG_ERR("Peer connect failed: 0x%02x", err);
-        ykb_slave_conn = NULL;
-        bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
-        return;
-    }
-
-    LOG_INF("Peer connected");
-
-    ykb_start_discovery(conn);
+    // Check if it slave or not
+    // if not, we consider it a host
 }
 
 static void ykb_master_disconnected(struct bt_conn *conn, uint8_t reason) {
     char addr[BT_ADDR_LE_STR_LEN];
-
-    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-    LOG_ERR("Disconnected from %s, reason 0x%02x %s", addr, reason,
-            bt_hci_err_to_str(reason));
-
-    if (conn == ykb_slave_conn) {
-        bt_conn_unref(ykb_slave_conn);
-        ykb_slave_conn = NULL;
-        LOG_WRN("Peer disconnected, rescanning...");
-        bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
-        return;
-    }
-
-    if (reason == BT_HCI_ERR_REMOTE_USER_TERM_CONN) {
-        int res = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
-        if (res) {
-            LOG_ERR("Unable to unpair device %s (err %d)", addr, res);
-            return;
-        }
-        LOG_INF("Unpaired device %s", addr);
-    }
 }
 
 static void security_changed(struct bt_conn *conn, bt_security_t level,
                              enum bt_security_err err) {
     char addr[BT_ADDR_LE_STR_LEN];
-
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
     if (!err) {
@@ -228,20 +67,83 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     }
 }
 
-BT_CONN_CB_DEFINE(ykb_peer_cb) = {
+BT_CONN_CB_DEFINE(ykb_master_conn_callbacks) = {
     .connected = ykb_master_connected,
     .disconnected = ykb_master_disconnected,
     .security_changed = security_changed,
 };
 
-void ykb_master_link_start() {
-    int err = bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
-    LOG_INF("Scan start with code: %d", err);
+/*-------------L2CAP--------------------*/
+
+// Channel for L2CAP connection
+static struct bt_l2cap_le_chan ykb_l2cap_slave_chan;
+
+// --- L2CAP Callbacks и Сервер для слейва ---
+static int ykb_l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf) {
+    // Получены данные от слейв-платы
+    if (buf->len == BT_CONNECT_HID_REPORT_COUNT) {
+        memcpy(slave_report, buf->data, BT_CONNECT_HID_REPORT_COUNT);
+        LOG_DBG("Received slave report: %s",
+                bt_hex(slave_report, BT_CONNECT_HID_REPORT_COUNT));
+    } else {
+        LOG_WRN("Received L2CAP data of unexpected length: %u", buf->len);
+    }
+    net_buf_unref(buf);
 }
 
-void ykb_master_link_stop() {
-    bt_le_scan_stop();
+static void ykb_l2cap_connected(struct bt_l2cap_chan *chan) {
+    LOG_INF("L2CAP channel connected from slave");
+    // Соединение L2CAP успешно установлено.
+    // Теперь можно отправлять данные на мастер-плату.
 }
+
+static void ykb_l2cap_disconnected(struct bt_l2cap_chan *chan) {
+    LOG_INF("L2CAP channel disconnected from slave");
+    // L2CAP канал разорван.
+    // Нужно убедиться, что slave_conn обнуляется при отключении базового
+    // BLE-соединения
+}
+
+// Операции для L2CAP канала
+static struct bt_l2cap_chan_ops l2cap_slave_ops = {
+    .connected = ykb_l2cap_connected,
+    .disconnected = ykb_l2cap_disconnected,
+    .recv = ykb_l2cap_recv,
+};
+
+// Callback для принятия входящего L2CAP-канала
+static int ykb_l2cap_accept(struct bt_conn *conn,
+                            struct bt_l2cap_server *server,
+                            struct bt_l2cap_chan **chan) {
+    // Проверяем, это ли соединение от слейва
+    if (conn != slave_conn) {
+        LOG_INF("Accepting L2CAP connection (conn %p, current slave_conn %p)",
+                conn, slave_conn);
+        slave_conn =
+            bt_conn_ref(conn); // Обновляем ссылку на соединение со слейвом
+    }
+
+    *chan = &ykb_l2cap_slave_chan;
+    bt_l2cap_le_chan_init(&ykb_l2cap_slave_chan, &l2cap_slave_ops);
+    return 0;
+}
+
+// L2CAP сервер
+static struct bt_l2cap_server l2cap_ykb_server = {
+    .psm = YKB_L2CAP_PSM,
+    .accept = ykb_l2cap_accept,
+};
+
+// Функция инициализации L2CAP сервера
+void ykb_master_l2cap_server_init(void) {
+    int err = bt_l2cap_server_register(&l2cap_ykb_server);
+    if (err) {
+        LOG_ERR("Failed to register L2CAP server (err %d)", err);
+    } else {
+        LOG_INF("L2CAP server registered, PSM: %d", YKB_L2CAP_PSM);
+    }
+}
+/*-------------Other STUFF--------------------*/
 
 void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                               uint8_t report_count) {

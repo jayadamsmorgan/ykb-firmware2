@@ -52,6 +52,7 @@ if LIB_BT_CONNECT
 
         endchoice
 
+
     endif # BT_INTER_KB_COMM
 
 endif # LIB_BT_CONNECT

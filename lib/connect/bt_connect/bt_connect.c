@@ -54,22 +54,6 @@ static struct hids_report input = {
     .type = 0x01, // HIDS_INPUT
 };
 
-static const struct bt_data ad[] = {
-    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-    BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xC1, 0x03),
-    BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
-                  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)),
-#if CONFIG_BT_INTER_KB_COMM_SLAVE
-    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le,
-            sizeof(ykb_svc_uuid_le)), // <- сюда
-#endif
-};
-
-static const struct bt_data sd[] = {
-    BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
-            sizeof(CONFIG_BT_DEVICE_NAME) - 1),
-};
-
 static const uint8_t report_map[] = HID_KEYBOARD_REPORT_DESC();
 static bool bt_kb_ready;
 static uint8_t ctrl_point;
@@ -133,6 +117,10 @@ static void bt_ready(int err) {
         return;
     }
 
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+
+    // LOG_INF("L2CAP Server init successfully");
+
     err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
                           ARRAY_SIZE(sd));
 
@@ -141,19 +129,44 @@ static void bt_ready(int err) {
         return;
     }
 
-#if CONFIG_BT_INTER_KB_COMM_MASTER
-
-    LOG_INF("Starting first scan");
-    ykb_master_link_start();
+    LOG_INF("Advertising successfully started");
 
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
 
-    LOG_INF("Advertising successfully started");
+#if CONFIG_BT_INTER_KB_COMM_SLAVE
+
+    // LOG_INF("Starting first scan");
+    ykb_slave_link_start();
+
+#endif // CONFIG_BT_INTER_KB_COMM_SLAVE
 }
 
 int bt_connect_init() {
 
+// Setup slave_id for slave keyboard
+#if CONFIG_BT_INTER_KB_COMM_SLAVE
+    int my_id_idx = BT_ID_DEFAULT;
+    int rc = bt_id_reset(BT_ID_DEFAULT, &slave_id, NULL);
+    if (rc) {
+        int id = bt_id_create(&slave_id, NULL);
+        if (id >= 0)
+            my_id_idx = id;
+    }
+
+    bt_addr_le_t addrs[CONFIG_BT_ID_MAX];
+    size_t count = ARRAY_SIZE(addrs);
+    bt_id_get(addrs, &count);
+
+    if (my_id_idx >= 0 && my_id_idx < (int)count) {
+        char s[BT_ADDR_LE_STR_LEN];
+        bt_addr_le_to_str(&addrs[my_id_idx], s, sizeof(s));
+        printk("Slave identity[%d]: %s\n", my_id_idx, s);
+    }
+
+#endif // CONFIG_BT_INTER_KB_COMM_SLAVE
+
     int ret = bt_enable(bt_ready);
+
     if (ret) {
         LOG_ERR("Bluetooth init failed (err %d)", ret);
         return -1;
