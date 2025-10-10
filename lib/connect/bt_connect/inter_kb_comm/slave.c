@@ -48,70 +48,154 @@ static uint8_t discover_cb(struct bt_conn *c, const struct bt_gatt_attr *attr,
                            struct bt_gatt_discover_params *params) {
     if (!attr) {
         LOG_WRN("Discovery finished (type=%u)", params->type);
+
+        if (params->type == BT_GATT_DISCOVER_CHARACTERISTIC) {
+            /* После прохода по характеристикам — если у нас есть
+               state_tx_handle, то запускаем поиск CCC для него */
+            if (state_tx_handle) {
+                memset(&disc, 0, sizeof(disc));
+                disc.uuid = BT_UUID_GATT_CCC;
+                disc.start_handle = state_tx_handle + 1;
+                disc.end_handle = svc_end;
+                disc.type = BT_GATT_DISCOVER_DESCRIPTOR;
+                disc.func = discover_cb;
+                int rc = bt_gatt_discover(c, &disc);
+                LOG_INF("Discover CCC rc=%d (searching after handle 0x%04x)",
+                        rc, state_tx_handle);
+            } else {
+                LOG_WRN("STATE_TX characteristic not found in service");
+            }
+        } else if (params->type == BT_GATT_DISCOVER_DESCRIPTOR) {
+            /* Descriptor discovery finished */
+            if (state_ccc_handle) {
+                /* подписка уже сделана в handler при нахождении дескриптора */
+            } else {
+                LOG_WRN("CCC for STATE_TX not found");
+            }
+        }
+
         return BT_GATT_ITER_STOP;
     }
 
-    switch (params->type) {
-    case BT_GATT_DISCOVER_PRIMARY: {
+    if (params->type == BT_GATT_DISCOVER_PRIMARY) {
         const struct bt_gatt_service_val *prim = attr->user_data;
         svc_start = attr->handle + 1;
         svc_end = prim->end_handle;
 
-        disc.uuid = &YKB_KEYS_RX_UUID.uuid;
+        /* Теперь запускаем discovery всех характеристик в сервисе */
+        memset(&disc, 0, sizeof(disc));
+        disc.uuid = NULL; /* NULL — вернуть все характеристики */
         disc.start_handle = svc_start;
         disc.end_handle = svc_end;
         disc.type = BT_GATT_DISCOVER_CHARACTERISTIC;
+        disc.func = discover_cb;
         bt_gatt_discover(c, &disc);
         return BT_GATT_ITER_STOP;
     }
 
-    case BT_GATT_DISCOVER_CHARACTERISTIC: {
+    if (params->type == BT_GATT_DISCOVER_CHARACTERISTIC) {
         const struct bt_gatt_chrc *chrc = attr->user_data;
+        if (!chrc) {
+            return BT_GATT_ITER_CONTINUE;
+        }
 
+        /* Явная проверка UUID'ов */
         if (bt_uuid_cmp(chrc->uuid, &YKB_KEYS_RX_UUID.uuid) == 0) {
             keys_rx_handle = chrc->value_handle;
-
-            disc.uuid = &YKB_STATE_TX_UUID.uuid;
-            disc.start_handle = svc_start;
-            disc.end_handle = svc_end;
-            disc.type = BT_GATT_DISCOVER_CHARACTERISTIC;
-            bt_gatt_discover(c, &disc);
-            return BT_GATT_ITER_STOP;
-
-        } else {
-            /* We found STATE_TX characteristic */
+            LOG_DBG("Found KEYS_RX handle 0x%04x", keys_rx_handle);
+        } else if (bt_uuid_cmp(chrc->uuid, &YKB_STATE_TX_UUID.uuid) == 0) {
             state_tx_handle = chrc->value_handle;
-
-            disc.uuid = BT_UUID_GATT_CCC;
-            disc.start_handle = state_tx_handle + 1;
-            disc.end_handle = svc_end;
-            disc.type = BT_GATT_DISCOVER_DESCRIPTOR;
-            bt_gatt_discover(c, &disc);
-            return BT_GATT_ITER_STOP;
+            LOG_DBG("Found STATE_TX handle 0x%04x", state_tx_handle);
+        } else {
+            LOG_DBG("Other characteristic found (handle 0x%04x)",
+                    chrc->value_handle);
         }
+
+        /* Продолжаем, чтобы собрать все характеристики */
+        return BT_GATT_ITER_CONTINUE;
     }
 
-    case BT_GATT_DISCOVER_DESCRIPTOR: {
-        state_ccc_handle = attr->handle;
+    if (params->type == BT_GATT_DISCOVER_DESCRIPTOR) {
+        char ustr[37];
+        if (attr && attr->uuid) {
+            bt_uuid_to_str(attr->uuid, ustr, sizeof(ustr));
+            LOG_INF("Descriptor handle=0x%04x uuid=%s", attr->handle, ustr);
+        } /* Ожидаем найти CCC дескриптор для STATE_TX */
+        if (attr->uuid && bt_uuid_cmp(attr->uuid, BT_UUID_GATT_CCC) == 0) {
+            state_ccc_handle = attr->handle;
+            LOG_INF("Found STATE_TX CCC handle 0x%04x", state_ccc_handle);
 
-        memset(&sub, 0, sizeof(sub));
-        sub.ccc_handle = state_ccc_handle;
-        sub.value_handle = state_tx_handle;
-        sub.value = BT_GATT_CCC_NOTIFY;
-        sub.notify = state_notify_cb;
+            /* Подписываемся */
+            memset(&sub, 0, sizeof(sub));
+            sub.ccc_handle = state_ccc_handle;
+            sub.value_handle = state_tx_handle;
+            sub.notify = state_notify_cb;
+            sub.value = BT_GATT_CCC_NOTIFY;
+            int rc = bt_gatt_subscribe(c, &sub);
+            if (rc == 0) {
+                LOG_INF("Subscribed to STATE_TX notify (value_handle=0x%04x, "
+                        "ccc=0x%04x)",
+                        sub.value_handle, sub.ccc_handle);
+            } else {
+                LOG_ERR("Failed to subscribe STATE_TX (rc=%d)", rc);
+            }
+        }
 
-        int rc = bt_gatt_subscribe(c, &sub);
-        state_tx_subscribed = (rc == 0);
-        LOG_INF("Subscribe STATE_TX rc=%d (val=%u ccc=%u)", rc, state_tx_handle,
-                state_ccc_handle);
-        return BT_GATT_ITER_STOP;
+        return BT_GATT_ITER_CONTINUE;
     }
 
-    default:
-        return BT_GATT_ITER_STOP;
-    }
+    return BT_GATT_ITER_CONTINUE;
 }
+static uint8_t discover_cb_debug(struct bt_conn *conn,
+                                 const struct bt_gatt_attr *attr,
+                                 struct bt_gatt_discover_params *params) {
+    char ustr[BT_UUID_STR_LEN];
 
+    if (!attr) {
+        LOG_INF("Discovery finished (type=%u)", params->type);
+        return BT_GATT_ITER_STOP;
+    }
+
+    if (params->type == BT_GATT_DISCOVER_PRIMARY) {
+        const struct bt_gatt_service_val *prim = attr->user_data;
+        svc_start = attr->handle + 1;
+        svc_end = prim->end_handle;
+        LOG_INF("Service range: 0x%04x - 0x%04x", svc_start, svc_end);
+
+        /* Запросим все характеристики в этом сервисе */
+        memset(&disc, 0, sizeof(disc));
+        disc.uuid = NULL;
+        disc.func = discover_cb_debug;
+        disc.start_handle = svc_start;
+        disc.end_handle = svc_end;
+        disc.type = BT_GATT_DISCOVER_CHARACTERISTIC;
+        bt_gatt_discover(conn, &disc);
+        return BT_GATT_ITER_STOP;
+    }
+
+    if (params->type == BT_GATT_DISCOVER_CHARACTERISTIC) {
+        const struct bt_gatt_chrc *chrc = attr->user_data;
+        bt_uuid_to_str(chrc->uuid, ustr, sizeof(ustr));
+        LOG_INF("Char decl handle=0x%04x value_handle=0x%04x uuid=%s",
+                attr->handle, chrc->value_handle, ustr);
+        /* продолжать — чтобы собрать все характеристики */
+        return BT_GATT_ITER_CONTINUE;
+    }
+
+    if (params->type == BT_GATT_DISCOVER_DESCRIPTOR) {
+        /* Здесь attr->uuid может быть NULL для некоторых платформ, но обычно
+         * есть */
+        if (attr->uuid) {
+            bt_uuid_to_str(attr->uuid, ustr, sizeof(ustr));
+            LOG_INF("Descriptor handle=0x%04x uuid=%s", attr->handle, ustr);
+        } else {
+            LOG_INF("Descriptor handle=0x%04x uuid=NULL", attr->handle);
+        }
+        return BT_GATT_ITER_CONTINUE;
+    }
+
+    return BT_GATT_ITER_CONTINUE;
+}
 static void start_discovery(struct bt_conn *c) {
     memset(&disc, 0, sizeof(disc));
     disc.uuid = &YKB_SPLIT_SVC_UUID.uuid;
@@ -183,6 +267,9 @@ static void peer_connected(struct bt_conn *conn, uint8_t err) {
     struct bt_conn_info info;
     if (!bt_conn_get_info(conn, &info) && info.role == BT_CONN_ROLE_CENTRAL) {
         LOG_INF("Connected to master as CENTRAL");
+        if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
+            LOG_ERR("Failed to set security");
+        }
         /* Tighten link if needed */
         static const struct bt_le_conn_param fast = {.interval_min = 6,
                                                      .interval_max = 12,

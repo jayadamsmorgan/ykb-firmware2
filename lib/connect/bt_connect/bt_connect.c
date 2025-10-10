@@ -47,8 +47,7 @@ static struct hids_info info = {
 };
 
 static struct hids_report input = {
-    .id = 0x01,
-    .type = 0x01, /* HIDS_INPUT */
+    .id = 0x01, .type = 0x01, /* HIDS_INPUT */
 };
 
 /* Advertising
@@ -182,6 +181,8 @@ void bt_connect_start_advertising(void) {
 }
 
 /* HID service to the host (unchanged layout) */
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+
 BT_GATT_SERVICE_DEFINE(
     hog_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_HIDS),
     BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
@@ -200,6 +201,7 @@ BT_GATT_SERVICE_DEFINE(
                            BT_GATT_CHRC_WRITE_WITHOUT_RESP, BT_GATT_PERM_WRITE,
                            NULL, write_ctrl_point, &ctrl_point));
 
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
 /* Send HID input up to the host.
  *
  * MASTER build:
@@ -221,8 +223,8 @@ void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
         ykb_slave_send_keys(report); /* write WNR upstream to master */
     } else {
         /* optional standalone behavior */
-        bt_gatt_notify(NULL, &hog_svc.attrs[6], report,
-                       BT_CONNECT_HID_REPORT_COUNT);
+        // bt_gatt_notify(NULL, &hog_svc.attrs[6], report,
+        //                BT_CONNECT_HID_REPORT_COUNT);
     }
 
 #else
