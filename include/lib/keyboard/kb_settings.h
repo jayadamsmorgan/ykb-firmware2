@@ -22,7 +22,13 @@ typedef struct {
     uint16_t minimums[CONFIG_KB_KEY_COUNT];
     uint16_t maximums[CONFIG_KB_KEY_COUNT];
 
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+    uint8_t mappings[(CONFIG_KB_KEY_COUNT + CONFIG_KB_KEY_COUNT_SLAVE) *
+                     CONFIG_KB_MAX_LAYERS_SUPPORTED];
+#else
     uint8_t mappings[CONFIG_KB_KEY_COUNT * CONFIG_KB_MAX_LAYERS_SUPPORTED];
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
+
 } kb_settings_t;
 
 int kb_settings_init();

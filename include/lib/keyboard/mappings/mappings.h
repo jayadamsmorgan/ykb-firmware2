@@ -1,6 +1,10 @@
 #ifndef MAPPINGS_H_
 #define MAPPINGS_H_
 
+#include <lib/keyboard/kb_keys.h>
+
+#include <stdint.h>
+
 #define DEFAULT_MAPPINGS default_mappings
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER

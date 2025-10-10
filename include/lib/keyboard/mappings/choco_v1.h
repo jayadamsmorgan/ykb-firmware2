@@ -1,10 +1,7 @@
 #ifndef CHOCO_V1_MAPPINGS_H
 #define CHOCO_V1_MAPPINGS_H
 
-#include <lib/keyboard/kb_keys.h>
 #include <lib/keyboard/mappings/mappings.h>
-
-#include <stdint.h>
 
 // Mappings:
 

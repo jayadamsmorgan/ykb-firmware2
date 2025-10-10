@@ -11,13 +11,13 @@ LOG_MODULE_REGISTER(kb_settings, CONFIG_KB_SETTINGS_LOG_LEVEL);
 
 #include YKB_DEF_MAPPINGS_PATH
 
-#define DEF_MAP default_mappings
+#define DEF_MAP DEFAULT_MAPPINGS
+
 BUILD_ASSERT(sizeof DEF_MAP != 0, "Mappings are empty.");
-BUILD_ASSERT((sizeof DEF_MAP / sizeof DEF_MAP[0]) % CONFIG_KB_KEY_COUNT == 0,
-             "Mappings do not align with key count");
-BUILD_ASSERT((sizeof DEF_MAP / sizeof DEF_MAP[0]) / CONFIG_KB_KEY_COUNT <=
-                 CONFIG_KB_MAX_LAYERS_SUPPORTED,
-             "Mapping's layers exceeds maximum layers supported.");
+
+BUILD_ASSERT(
+    MAPPINGS_LAYER_COUNT <= CONFIG_KB_MAX_LAYERS_SUPPORTED,
+    "Amount of default mapping layers exceeds CONFIG_KB_MAX_LAYERS_SUPPORTED");
 
 BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
                  CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM,

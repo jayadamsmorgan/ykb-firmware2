@@ -1,10 +1,7 @@
 #ifndef DACTYL_V1_MAPPINGS_H
 #define DACTYL_V1_MAPPINGS_H
 
-#include <lib/keyboard/kb_keys.h>
 #include <lib/keyboard/mappings/mappings.h>
-
-#include <stdint.h>
 
 #define MAPPINGS_LAYER_COUNT 1
 
