@@ -125,7 +125,6 @@ static void bt_ready(int err) {
 
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
 
-    // LOG_INF("Starting first scan");
     ykb_slave_link_start();
 
 #endif // CONFIG_BT_INTER_KB_COMM_SLAVE
@@ -133,35 +132,11 @@ static void bt_ready(int err) {
 
 int bt_connect_init() {
 
-// Setup slave_id for slave keyboard
-#if CONFIG_BT_INTER_KB_COMM_SLAVE
-    int my_id_idx = BT_ID_DEFAULT;
-    int rc = bt_id_reset(BT_ID_DEFAULT, &slave_id, NULL);
-    if (rc) {
-        int id = bt_id_create(&slave_id, NULL);
-        if (id >= 0)
-            my_id_idx = id;
-    }
-
-    bt_addr_le_t addrs[CONFIG_BT_ID_MAX];
-    size_t count = ARRAY_SIZE(addrs);
-    bt_id_get(addrs, &count);
-
-    if (my_id_idx >= 0 && my_id_idx < (int)count) {
-        char s[BT_ADDR_LE_STR_LEN];
-        bt_addr_le_to_str(&addrs[my_id_idx], s, sizeof(s));
-        printk("Slave identity[%d]: %s\n", my_id_idx, s);
-    }
-
-#endif // CONFIG_BT_INTER_KB_COMM_SLAVE
-
     int ret = bt_enable(bt_ready);
-
     if (ret) {
         LOG_ERR("Bluetooth init failed (err %d)", ret);
         return -1;
     }
-
     return 0;
 }
 

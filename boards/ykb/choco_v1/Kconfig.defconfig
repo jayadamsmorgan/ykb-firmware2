@@ -29,6 +29,15 @@ if BOARD_CHOCO_V1
     
         config BT_GAP_AUTO_UPDATE_CONN_PARAMS
             default y
+        
+        config BT_DEVICE_APPEARANCE
+            default 961
+        
+        config BT_MAX_PAIRED
+            default 5
+
+        config BT_MAX_CONN
+            default 2
 
     endif # BT_INTER_KB_COMM_MASTER
     
@@ -45,6 +54,12 @@ if BOARD_CHOCO_V1
 
         config BT_SCAN_WITH_IDENTITY
             default y
+        
+        config BT_MAX_PAIRED
+            default 1
+
+        config BT_MAX_CONN
+            default 1
         
     endif # BT_INTER_KB_COMM_SLAVE
     
@@ -89,19 +104,6 @@ if BOARD_CHOCO_V1
     
     endif # YKB_INTER_KB_COM
     
-    if YKB_BT_ENABLED
-
-        config BT_DEVICE_APPEARANCE
-            default 961
-
-        config BT_MAX_PAIRED
-            default 10
-
-        config BT_MAX_CONN
-            default 2
-
-    endif # YKB_BT_ENABLED
-
     if YKB_RIGHT
 
         config YKB_USBD_PRODUCT

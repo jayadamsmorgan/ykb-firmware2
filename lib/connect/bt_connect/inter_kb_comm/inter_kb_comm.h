@@ -28,11 +28,6 @@ static const struct bt_data sd[] = {
             sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 
-static bt_addr_le_t slave_id = {
-    .type = BT_ADDR_LE_RANDOM,
-    .a = {.val = {0x34, 0x12, 0xCE, 0xFA, 0xDE, 0xC0}} /* = C0:DE:FA:CE:12:34 */
-};
-
 // L2CAP server adress
 #define YKB_L2CAP_PSM 0x0080
 // L2CAP max size in bytes
