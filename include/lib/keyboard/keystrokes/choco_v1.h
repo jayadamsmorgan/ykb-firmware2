@@ -3,8 +3,19 @@
 
 #include <lib/keyboard/kb_fn_keystroke.h>
 
+#if CONFIG_BT_INTER_KB_COMM_SLAVE
+extern void bt_connect_master_pairing();
+KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_co_right, bt_connect_master_pairing, KEY_KEYPAD_LCURBRACE);
+#endif
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+extern void bt_connect_slave_pairing();
+KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_co_left, bt_connect_slave_pairing, KEY_ESCAPE);
+#endif
+
 // Bluetooth
 //
+
 KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_fr_left, bt_connect_factory_reset, KEY_A);
 KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_sta_left, bt_connect_start_advertising, KEY_S);
 KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_fr_right, bt_connect_factory_reset, KEY_H);

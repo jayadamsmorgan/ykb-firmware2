@@ -19,13 +19,27 @@ static uint8_t ykb_ccc_enabled;
 
 static struct bt_conn *ykb_master_conn = NULL;
 
-static struct bt_l2cap_le_chan ykb_l2cap_master_chan;
+static struct bt_l2cap_chan ykb_l2cap_master_chan;
 
 static atomic_t conn_connected = ATOMIC_INIT(0);
 static atomic_t chan_connected = ATOMIC_INIT(0);
 
+static atomic_t master_connection = ATOMIC_INIT(0);
+
 static struct bt_gatt_discover_params disc_params;
 static struct bt_gatt_subscribe_params sub_params;
+
+void bt_connect_master_pairing() {
+    if (!conn_connected) {
+        // Turn on "pairing" led animation
+        if (master_connection) {
+            master_connection = false;
+            bt_le_scan_stop();
+        } else
+            master_connection = true;
+        start_scanning();
+    }
+}
 
 /* --- Central scan/connect to master ------------------------*/
 static bool uuid_match_cb(struct bt_data *data, void *user_data) {
@@ -53,14 +67,15 @@ static bool adv_has_split_uuid(struct net_buf_simple *ad) {
 static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
                              uint8_t adv_type, struct net_buf_simple *ad) {
 
-    LOG_INF("Found some BT device");
     // Check if connection have right one UUID
     if (!adv_has_split_uuid(ad)) {
         return;
     }
+    LOG_INF("Found some BT device with right ad");
 
     // Check if master already connected
     if (ykb_master_conn != NULL) {
+        LOG_INF("Master already connected");
         return;
     }
 
@@ -74,12 +89,13 @@ static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
     };
 
     bt_le_scan_stop();
+    // Create connection with master board
     int rc = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, &conn_param,
                                &ykb_master_conn);
     if (rc) {
         LOG_ERR("Failed to create connection to master (err %d)", rc);
         ykb_master_conn = NULL;
-        start_scanning();
+        // start_scanning();
     }
 }
 
@@ -96,7 +112,6 @@ void start_scanning(void) {
 }
 
 // --- L2CAP Callbacks ---
-
 static int ykb_l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf) {
     LOG_DBG("Received L2CAP data from master, len: %u", buf->len);
     // net_buf_unref(buf);
@@ -105,10 +120,12 @@ static int ykb_l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf) {
 
 static void ykb_l2cap_connected(struct bt_l2cap_chan *chan) {
     LOG_INF("L2CAP channel connected to master!");
+    atomic_set(&chan_connected, 1);
 }
 
 static void ykb_l2cap_disconnected(struct bt_l2cap_chan *chan) {
     LOG_INF("L2CAP channel disconnected from master!");
+    atomic_set(&chan_connected, 0);
 }
 static void ykb_l2cap_sent(struct bt_l2cap_chan *chan) {
     LOG_INF("ykb_l2cap_sended");
@@ -130,19 +147,21 @@ static void ykb_slave_connected(struct bt_conn *conn, uint8_t err) {
     if (err) {
         LOG_ERR("Failed to connect to master %s, err 0x%02x %s", addr_str, err,
                 bt_hci_err_to_str(err));
-        ykb_master_conn = NULL;
+        // ykb_master_conn = NULL;
         start_scanning();
         return;
     }
-
-    LOG_INF("Connected to master: %s", addr_str);
-    ykb_master_conn = bt_conn_ref(conn);
-
-    int rc =
-        bt_l2cap_chan_connect(conn, &ykb_l2cap_master_chan.chan, YKB_L2CAP_PSM);
-    if (rc) {
-        LOG_ERR("Failed to connect L2CAP channel (err %d)", rc);
-        // bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+    if (!conn_connected) {
+        LOG_INF("Connected to master: %s", addr_str);
+        ykb_master_conn = bt_conn_ref(conn);
+        atomic_set(&conn_connected, 1);
+        int rc =
+            bt_l2cap_chan_connect(conn, &ykb_l2cap_master_chan, YKB_L2CAP_PSM);
+        if (rc) {
+            LOG_ERR("Failed to connect L2CAP channel (err %d)", rc);
+            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+            start_scanning();
+        }
     }
 }
 
@@ -156,11 +175,10 @@ static void ykb_slave_disconnected(struct bt_conn *conn, uint8_t reason) {
     if (conn == ykb_master_conn) {
         bt_conn_unref(ykb_master_conn);
         ykb_master_conn = NULL;
+        atomic_set(&conn_connected, 0);
         LOG_WRN("Master disconnected, rescanning...");
-        start_scanning(); // Перезапускаем сканирование для поиска мастера
+        start_scanning();
     }
-    // Здесь также можно добавить логику для очистки сопряженных устройств
-    // if (reason == BT_HCI_ERR_REMOTE_USER_TERM_CONN) { /* ... */ }
 }
 
 static void security_changed(struct bt_conn *conn, bt_security_t level,
@@ -171,7 +189,8 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     if (!err) {
         LOG_INF("Security changed: %s level %u", addr, level);
         // Если безопасность установлена, и это наше соединение с мастером,
-        // можно убедиться, что L2CAP-канал уже установлен или инициировать его.
+        // можно убедиться, что L2CAP-канал уже установлен или инициировать
+        // его.
     } else {
         LOG_ERR("Security failed: %s level %u err %s(%d)", addr, level,
                 bt_security_err_to_str(err), err);
@@ -202,8 +221,8 @@ void ykb_slave_send_keys(const uint8_t data[BT_CONNECT_HID_REPORT_COUNT]) {
     }
 
     // Отправляем данные по L2CAP-каналу
-    // bt_l2cap_chan_send принимает struct bt_l2cap_chan *, net_buf *, а не raw
-    // data. Нужно создать net_buf для отправки.
+    // bt_l2cap_chan_send принимает struct bt_l2cap_chan *, net_buf *, а не
+    // raw data. Нужно создать net_buf для отправки.
 
     // struct net_buf *buf = bt_l2cap_create_pdu_timeout(
     //     NULL, 0, K_FOREVER); // K_FOREVER или другой таймаут
@@ -218,14 +237,16 @@ void ykb_slave_send_keys(const uint8_t data[BT_CONNECT_HID_REPORT_COUNT]) {
     // int rc = bt_l2cap_chan_send(&ykb_l2cap_master_chan.chan, buf);
     // if (rc) {
     //     LOG_ERR("Failed to send L2CAP data (err %d)", rc);
-    //     net_buf_unref(buf); // Освобождаем буфер, если отправка не удалась
+    //     net_buf_unref(buf); // Освобождаем буфер, если отправка не
+    //     удалась
     // } else {
     //     LOG_DBG("L2CAP data sent to master.");
     // }
 }
 
 void ykb_slave_link_start() {
-    start_scanning();
+    LOG_INF("Press Fn + { to start scanning");
+    // start_scanning();
 }
 
 void ykb_slave_link_stop() {

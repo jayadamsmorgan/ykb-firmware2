@@ -16,7 +16,24 @@ LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 static struct bt_conn *host_conn = NULL;
 static struct bt_conn *slave_conn = NULL;
 
+static atomic_t host_connected = ATOMIC_INIT(0);
+
+static atomic_t slave_conn_connected = ATOMIC_INIT(0);
+static atomic_t slave_chan_connected = ATOMIC_INIT(0);
+
+static atomic_t slave_connection = ATOMIC_INIT(0);
+
 static uint8_t slave_report[BT_CONNECT_HID_REPORT_COUNT] = {0};
+
+void bt_connect_slave_pairing() {
+    if (!slave_conn_connected) {
+        // Turn on "pairing" led animation
+        if (slave_connection) {
+            slave_connection = false;
+        } else
+            slave_connection = true;
+    }
+}
 
 static void start_advertising(void) {
     int err;
@@ -32,7 +49,31 @@ static void start_advertising(void) {
 }
 
 static void ykb_master_disconnected(struct bt_conn *conn, uint8_t reason) {
+
     char addr[BT_ADDR_LE_STR_LEN];
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+    LOG_INF("Disconnected from %s, reason 0x%02x (%s)", addr, reason,
+            bt_hci_err_to_str(reason));
+
+    if (slave_conn_connected && conn == slave_conn) {
+        LOG_WRN("Slave disconnected");
+        bt_conn_unref(slave_conn);
+        slave_conn = NULL;
+        slave_conn_connected = false;
+    } else {
+        if (host_connected) {
+            LOG_WRN("Host disconnected");
+            host_conn = NULL;
+            host_connected = false;
+        }
+    }
+
+    if (!slave_conn_connected || !host_connected) {
+        LOG_INF("Restart advertising");
+        int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+                                  ARRAY_SIZE(sd));
+    }
 }
 
 static void security_changed(struct bt_conn *conn, bt_security_t level,
@@ -127,7 +168,7 @@ void ykb_master_l2cap_server_init(void) {
 static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
 
     char addr[BT_ADDR_LE_STR_LEN];
-
+    LOG_INF("Someone try to connect");
     // Get information about central device
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
@@ -140,6 +181,31 @@ static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
     }
     // Check if it slave or not
     // if not, we consider it a host
+    if (slave_connection) {          // Slave connection period
+        if (!slave_conn_connected) { // Slave does not connected
+            LOG_INF("We are connecting to SLAVE!");
+            if (!err)
+                slave_conn = bt_conn_ref(conn);
+
+            if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
+                LOG_ERR("Failed to set security");
+            }
+            slave_conn_connected = true;
+            LOG_INF("Successfully connected to slave");
+        }
+    } else {
+        if (!host_connected) { // Host does not connected
+            LOG_INF("We are connecting to HOST!");
+            if (!err)
+                slave_conn = bt_conn_ref(conn);
+
+            if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
+                LOG_ERR("Failed to set security");
+            }
+            host_connected = true;
+            LOG_INF("Successfully connected to HOST");
+        }
+    }
 }
 
 BT_CONN_CB_DEFINE(ykb_master_conn_callbacks) = {
