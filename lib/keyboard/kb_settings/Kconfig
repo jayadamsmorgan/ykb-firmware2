@@ -5,6 +5,13 @@ menu "Keyboard settings"
         help
           Specify the amount of keys available
 
+    config KB_KEY_COUNT_SLAVE
+        int "Amount of keys on the slave keyboard"
+        depends on BT_INTER_KB_COMM_MASTER
+        default KB_KEY_COUNT
+        help
+          Specify the amount of keys available on the connected slave keyboard
+
     config KB_MAX_LAYERS_SUPPORTED
         int "Maximum amount of layers supported by the keyboard"
         range 1 10

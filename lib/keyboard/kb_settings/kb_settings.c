@@ -60,7 +60,7 @@ static void kb_settings_load_default(void) {
         settings.maximums[i] = CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM;
     }
 
-    settings.layer_count = MAPPINGS_KB_LAYER_COUNT;
+    settings.layer_count = MAPPINGS_LAYER_COUNT;
     settings.layer_index = 0;
     settings.mode = KB_MODE_NORMAL;
 

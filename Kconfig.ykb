@@ -1,17 +1,22 @@
 menu "YKB Firmware"
 
-    choice YKB_LEFT_RIGHT
-        bool "Left/Right"
-        default YKB_LEFT
-        help
-          "Compile YKB firmware for left or right keyboard"
+    config YKB_SPLIT
+        bool "Enable support for split keyboards"
+        default n
 
-        config YKB_LEFT
-            bool "Left"
+    if YKB_SPLIT
+        choice YKB_LEFT_RIGHT
+            bool "Left/Right"
+            help
+              "Compile YKB firmware for left or right keyboard"
 
-        config YKB_RIGHT
-            bool "Right"
-    endchoice
+            config YKB_LEFT
+                bool "Left"
+
+            config YKB_RIGHT
+                bool "Right"
+        endchoice
+    endif # YKB_SPLIT
 
     rsource "Kconfig.ykb.usb"
     rsource "Kconfig.ykb.bt"

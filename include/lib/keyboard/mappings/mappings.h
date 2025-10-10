@@ -1,0 +1,36 @@
+#ifndef MAPPINGS_H_
+#define MAPPINGS_H_
+
+#define DEFAULT_MAPPINGS default_mappings
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+
+#define MAPPINGS_SIZE                                                          \
+    ((CONFIG_KB_KEY_COUNT + CONFIG_KB_KEY_COUNT_SLAVE) * MAPPINGS_LAYER_COUNT)
+
+#define LEFT_MAPPINGS(...) __VA_ARGS__
+#define RIGHT_MAPPINGS(...) __VA_ARGS__
+
+#else // CONFIG_BT_INTER_KB_COMM_MASTER
+
+#define MAPPINGS_SIZE (CONFIG_KB_KEY_COUNT * MAPPINGS_LAYER_COUNT)
+
+#if CONFIG_YKB_SPLIT
+
+#if CONFIG_YKB_LEFT
+#define LEFT_MAPPINGS(...) __VA_ARGS__
+#define RIGHT_MAPPINGS(...)
+#endif // CONFIG_YKB_LEFT
+
+#if CONFIG_YKB_RIGHT
+#define LEFT_MAPPINGS(...)
+#define RIGHT_MAPPINGS(...) __VA_ARGS__
+#endif // CONFIG_YKB_RIGHT
+
+#endif // CONFIG_YKB_SPLIT
+
+#endif // CONFIG_BT_INTER_KB_COMM
+
+#define DEFAULT_MAPPINGS_DEFINE static uint8_t DEFAULT_MAPPINGS[MAPPINGS_SIZE]
+
+#endif // MAPPINGS_H_

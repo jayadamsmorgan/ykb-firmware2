@@ -16,6 +16,7 @@ if LIB_BT_CONNECT
     config BT_INTER_KB_COMM
         bool "Inter-keyboard communication"
         default y
+        depends on YKB_SPLIT
         help
           Enables communication between two keyboard halves
           to act as one keyboard if connected.
