@@ -45,7 +45,7 @@ static inline bool bm_test(const uint32_t *bm, uint16_t idx) {
 }
 
 static inline void edge_detection(kb_settings_t *settings, uint32_t *prev_down,
-                                  uint32_t *curr_down,
+                                  uint32_t *curr_down, size_t bm_size,
                                   key_state_changed_cb on_press,
                                   key_state_changed_cb on_release) {
     for (size_t w = 0; w < KB_BITMAP_WORDS; ++w) {
@@ -55,13 +55,14 @@ static inline void edge_detection(kb_settings_t *settings, uint32_t *prev_down,
         for_each_set_bit(presses, base, on_press, settings);
         for_each_set_bit(releases, base, on_release, settings);
     }
+    memcpy(prev_down, curr_down, bm_size);
 }
 
 static int64_t last_update_time = 0;
 
-static inline bool kb_handle_basic(kb_settings_t *settings,
-                                   const struct device *const kscan,
-                                   uint16_t *values, uint32_t *curr_down) {
+static inline bool get_kscan_bitmap(kb_settings_t *settings,
+                                    const struct device *const kscan,
+                                    uint16_t *values, uint32_t *curr_down) {
 
     int64_t uptime = k_uptime_get();
     int64_t delta = uptime - last_update_time;
@@ -70,30 +71,27 @@ static inline bool kb_handle_basic(kb_settings_t *settings,
     }
     last_update_time = uptime;
 
-    uint8_t keys[CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS] = {0};
-    int n = 0;
-
     switch (settings->mode) {
     case KB_MODE_NORMAL: {
-        n = kscan_poll_normal(kscan, keys, settings->key_thresholds, values);
-        if (n < 0)
+        int res = kscan_poll_normal(kscan, curr_down, settings->key_thresholds,
+                                    values);
+        if (res < 0) {
+            LOG_ERR("Unable to poll normal (err %d)", res);
             return false;
+        }
         break;
     }
     case KB_MODE_RACE: {
-        int res = kscan_poll_race(kscan, settings->key_thresholds, values);
-        if (res < 0)
+        int res =
+            kscan_poll_race(kscan, curr_down, settings->key_thresholds, values);
+        if (res == -1)
             return false;
-        keys[0] = (uint8_t)res;
-        n = 1;
+        if (res < -1) {
+            LOG_ERR("Unable to poll race (err %d)", res);
+            return false;
+        }
         break;
     }
-    }
-
-    for (int i = 0; i < n; ++i) {
-        if (keys[i] >= CONFIG_KB_KEY_COUNT)
-            continue;
-        bm_set(curr_down, keys[i]);
     }
 
     return true;

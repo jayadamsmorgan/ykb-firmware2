@@ -46,20 +46,19 @@ void kb_handle() {
 
     kb_settings_t *settings = kb_settings_get();
 
-    if (!kb_handle_basic(settings, kscan, values, curr_down)) {
+    if (!get_kscan_bitmap(settings, kscan, values, curr_down)) {
         return;
     }
 
-    edge_detection(settings, prev_down, curr_down, on_press_master,
-                   on_release_master);
-    memcpy(prev_down, curr_down, sizeof(curr_down));
+    edge_detection(settings, prev_down, curr_down, KB_BITMAP_BYTECNT,
+                   on_press_master, on_release_master);
 
     int res =
         bt_connect_get_slave_keys(curr_down_slave, KB_BITMAP_SLAVE_BYTECNT);
     if (!res) {
         edge_detection(settings, prev_down_slave, curr_down_slave,
-                       on_press_slave, on_release_slave);
-        memcpy(prev_down_slave, curr_down_slave, sizeof(curr_down_slave));
+                       KB_BITMAP_SLAVE_BYTECNT, on_press_slave,
+                       on_release_slave);
     }
 
     clear_hid_report();

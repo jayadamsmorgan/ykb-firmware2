@@ -52,8 +52,11 @@ static bool kscan_key_pressed_by_threshold(const struct adc_dt_spec *spec,
     return true;
 }
 
-static int kscan_enables_poll_normal(const struct device *dev,
-                                     uint8_t *pressed_keys,
+static inline void bm_set(uint32_t *bm, uint16_t idx) {
+    bm[idx / 32] |= (1u << (idx % 32));
+}
+
+static int kscan_enables_poll_normal(const struct device *dev, uint32_t *bitmap,
                                      uint16_t *thresholds, uint16_t *values) {
     const struct kscan_enables_config *cfg = dev->config;
     int err;
@@ -72,7 +75,7 @@ static int kscan_enables_poll_normal(const struct device *dev,
             uint16_t val;
             if (kscan_key_pressed_by_threshold(adc_spec, &val,
                                                thresholds[key_index])) {
-                pressed_keys[pressed_count] = key_index;
+                bm_set(bitmap, key_index);
                 pressed_count++;
                 if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
                     err = gpio_pin_set_dt(&cfg->gpios[key_index], 0);
@@ -100,7 +103,7 @@ gpio_set_err:
     return -1;
 }
 
-static int kscan_enables_poll_race(const struct device *dev,
+static int kscan_enables_poll_race(const struct device *dev, uint32_t *bitmap,
                                    uint16_t *thresholds, uint16_t *values) {
     const struct kscan_enables_config *cfg = dev->config;
     int err;
@@ -135,11 +138,15 @@ static int kscan_enables_poll_race(const struct device *dev,
         }
     }
 
+    if (pressed_index >= 0) {
+        bm_set(bitmap, key_index);
+    }
+
     return pressed_index;
 
 gpio_set_err:
     LOG_ERR("Unable to set gpio pin with index %d (err %d)", key_index, err);
-    return -1;
+    return -2;
 }
 
 static DEVICE_API(kscan, kscan_enables_api) = {

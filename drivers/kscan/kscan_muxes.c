@@ -49,9 +49,12 @@ static bool kscan_key_pressed_by_threshold(const struct adc_dt_spec *spec,
     return true;
 }
 
-static int kscan_muxes_poll_normal(const struct device *dev,
-                                   uint8_t *pressed_keys, uint16_t *thresholds,
-                                   uint16_t *values) {
+static inline void bm_set(uint32_t *bm, uint16_t idx) {
+    bm[idx / 32] |= (1u << (idx % 32));
+}
+
+static int kscan_muxes_poll_normal(const struct device *dev, uint32_t *bitmap,
+                                   uint16_t *thresholds, uint16_t *values) {
     const struct kscan_muxes_config *cfg = dev->config;
     int err, ch_cnt;
     uint8_t key_index = 0;
@@ -76,7 +79,7 @@ static int kscan_muxes_poll_normal(const struct device *dev,
             uint16_t val;
             if (kscan_key_pressed_by_threshold(spec, &val,
                                                thresholds[key_index])) {
-                pressed_keys[pressed_count] = key_index;
+                bm_set(bitmap, key_index);
                 pressed_count++;
                 if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
                     return pressed_count;
@@ -92,8 +95,8 @@ static int kscan_muxes_poll_normal(const struct device *dev,
     return pressed_count;
 }
 
-static int kscan_muxes_poll_race(const struct device *dev, uint16_t *thresholds,
-                                 uint16_t *values) {
+static int kscan_muxes_poll_race(const struct device *dev, uint32_t *bitmap,
+                                 uint16_t *thresholds, uint16_t *values) {
     const struct kscan_muxes_config *cfg = dev->config;
     int err, ch_cnt;
     int max_val = 0;
@@ -129,6 +132,10 @@ static int kscan_muxes_poll_race(const struct device *dev, uint16_t *thresholds,
             }
             index++;
         }
+    }
+
+    if (pressed_index >= 0) {
+        bm_set(bitmap, index);
     }
 
     return pressed_index;

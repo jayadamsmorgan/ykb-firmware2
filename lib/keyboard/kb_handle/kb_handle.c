@@ -34,13 +34,12 @@ static void on_release_normal(uint8_t key_index, kb_settings_t *settings) {
 void kb_handle() {
     kb_settings_t *settings = kb_settings_get();
 
-    if (!kb_handle_basic(settings, kscan, values, curr_down)) {
+    if (!get_kscan_bitmap(settings, kscan, values, curr_down)) {
         return;
     }
 
-    edge_detection(settings, prev_down, curr_down, on_press_normal,
-                   on_release_normal);
-    memcpy(prev_down, curr_down, sizeof(curr_down));
+    edge_detection(settings, prev_down, curr_down, KB_BITMAP_BYTECNT,
+                   on_press_normal, on_release_normal);
 
     clear_hid_report();
 
