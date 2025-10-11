@@ -68,6 +68,17 @@ void on_release_slave(uint8_t key_index, kb_settings_t *settings) {
                        settings);
 }
 
+// Master keyboard's mappings contain [LEFT MAPPINGS + RIGHT MAPPINGS]
+#if CONFIG_BT_CONNECT_MASTER_LEFT
+#define MAPPINGS_MASTER(SETTINGS) SETTINGS->mappings
+#define MAPPINGS_SLAVE(SETTINGS)                                               \
+    &SETTINGS->mappings[CONFIG_KB_KEY_COUNT * SETTINGS->layer_count]
+#elif CONFIG_BT_CONNECT_MASTER_RIGHT
+#define MAPPINGS_MASTER(SETTINGS)                                              \
+    &SETTINGS->mappings[CONFIG_KB_KEY_COUNT_SLAVE * SETTINGS->layer_count]
+#define MAPPINGS_SLAVE(SETTINGS) SETTINGS->mappings
+#endif // CONFIG_BT_CONNECT_MASTER_RIGHT
+
 void kb_handle() {
 
     kb_settings_t *settings = kb_settings_get();
@@ -99,17 +110,12 @@ void kb_handle() {
     clear_hid_report();
 
     // Fill out HID report with master keys
-    build_hid_report_from_bitmap(settings->mappings, settings, curr_down);
+    build_hid_report_from_bitmap(MAPPINGS_MASTER(settings), settings,
+                                 curr_down);
 
     // Fill out HID report with slave keys
-    //
-    // Master keyboard's mappings contain both
-    // master mappings and slave mappings:
-    //  master_mappings[(CONFIG_KB_KEY_COUNT * LAYER_COUNT) +
-    //                  (CONFIG_KB_KEY_COUNT_SLAVE * LAYER_COUNT)]
-    build_hid_report_from_bitmap(
-        &settings->mappings[CONFIG_KB_KEY_COUNT * settings->layer_count],
-        settings, curr_down_slave);
+    build_hid_report_from_bitmap(MAPPINGS_SLAVE(settings), settings,
+                                 curr_down_slave);
 
     // Send HID report if possible BT/USB
     handle_hid_report();

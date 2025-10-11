@@ -81,9 +81,6 @@ static int kscan_muxes_poll_normal(const struct device *dev, uint32_t *bitmap,
                                                thresholds[key_index])) {
                 bm_set(bitmap, key_index);
                 pressed_count++;
-                if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
-                    return pressed_count;
-                }
             }
             if (values) {
                 values[key_index] = val;

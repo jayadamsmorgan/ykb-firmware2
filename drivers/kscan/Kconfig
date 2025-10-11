@@ -27,11 +27,6 @@ if KSCAN
 
     endchoice
 
-    config KSCAN_MAX_SIMULTANIOUS_KEYS
-        int "Maximum simultanious keys registered at once"
-        range 1 KB_KEY_COUNT
-        default 5
-
     module = KSCAN
     module-str = kscan
     source "subsys/logging/Kconfig.template.log_config"

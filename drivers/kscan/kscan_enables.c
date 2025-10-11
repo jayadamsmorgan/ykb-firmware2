@@ -77,12 +77,6 @@ static int kscan_enables_poll_normal(const struct device *dev, uint32_t *bitmap,
                                                thresholds[key_index])) {
                 bm_set(bitmap, key_index);
                 pressed_count++;
-                if (pressed_count >= CONFIG_KSCAN_MAX_SIMULTANIOUS_KEYS) {
-                    err = gpio_pin_set_dt(&cfg->gpios[key_index], 0);
-                    if (err)
-                        goto gpio_set_err;
-                    return pressed_count;
-                }
             }
             if (values) {
                 values[key_index] = val;

@@ -62,6 +62,7 @@ bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
         return false;
     }
     last_update_time = uptime;
+    memset(curr_down, 0, KB_BITMAP_BYTECNT);
 
     switch (settings->mode) {
     case KB_MODE_NORMAL: {

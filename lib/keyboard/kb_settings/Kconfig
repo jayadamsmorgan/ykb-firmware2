@@ -1,16 +1,27 @@
 menu "Keyboard settings"
 
-    config KB_KEY_COUNT
-        int "Amount of keyboard keys"
-        help
-          Specify the amount of keys available
+    if YKB_SPLIT
 
-    config KB_KEY_COUNT_SLAVE
-        int "Amount of keys on the slave keyboard"
-        depends on BT_INTER_KB_COMM_MASTER
-        default KB_KEY_COUNT
-        help
-          Specify the amount of keys available on the connected slave keyboard
+        config KB_KEY_COUNT_LEFT
+            int "Amount of left keyboard keys"
+            help
+              Specify the amount of keys for the left keyboard
+
+        config KB_KEY_COUNT_RIGHT
+            int "Amount of right keyboard keys"
+            help
+              Specify the amount of keys for the right keyboard
+
+    endif # YKB_SPLIT
+
+    if !YKB_SPLIT
+
+        config KB_KEY_COUNT
+            int "Amount of keyboard keys"
+            help
+              Specify the amount of keys available
+
+    endif # !YKB_SPLIT
 
     config KB_MAX_LAYERS_SUPPORTED
         int "Maximum amount of layers supported by the keyboard"

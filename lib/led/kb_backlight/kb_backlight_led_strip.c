@@ -1,5 +1,7 @@
 #include <lib/led/kb_backlight.h>
 
+#include <lib/keyboard/mappings/mappings.h>
+
 #include <lib/led/kb_bl_mode.h>
 
 #include <zephyr/logging/log.h>

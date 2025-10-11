@@ -1,6 +1,8 @@
 #ifndef LIB_KB_SETTINGS_H_
 #define LIB_KB_SETTINGS_H_
 
+#include <lib/keyboard/mappings/mappings.h>
+
 #include <zephyr/toolchain.h>
 
 #include <stdint.h>
