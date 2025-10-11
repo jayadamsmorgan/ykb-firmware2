@@ -243,8 +243,8 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi,
     LOG_INF("Found master advertising split UUID; connecting...");
 
     const struct bt_le_conn_param conn_param = {
-        .interval_min = 6,  /* 7.5 ms */
-        .interval_max = 12, /* 15  ms */
+        .interval_min = 6,
+        .interval_max = 24,
         .latency = 0,
         .timeout = 400, /* 4 s */
     };
@@ -252,7 +252,11 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi,
     bt_le_scan_stop();
     int rc = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, &conn_param,
                                &master_conn);
-    LOG_INF("bt_conn_le_create rc=%d", rc);
+    if (rc) {
+        LOG_ERR("bt_conn_le_create rc=%d", rc);
+        bt_le_scan_start(BT_LE_SCAN_ACTIVE, device_found);
+        return;
+    }
 }
 
 static void peer_connected(struct bt_conn *conn, uint8_t err) {
@@ -264,26 +268,17 @@ static void peer_connected(struct bt_conn *conn, uint8_t err) {
         return;
     }
 
-    struct bt_conn_info info;
-    if (!bt_conn_get_info(conn, &info) && info.role == BT_CONN_ROLE_CENTRAL) {
-        LOG_INF("Connected to master as CENTRAL");
-        if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
-            LOG_ERR("Failed to set security");
-        }
-        /* Tighten link if needed */
-        static const struct bt_le_conn_param fast = {.interval_min = 6,
-                                                     .interval_max = 12,
-                                                     .latency = 0,
-                                                     .timeout = 400};
-        bt_conn_le_param_update(conn, &fast);
+    LOG_INF("Connected to master as CENTRAL");
 
-        /* Optional: DLE/PHY */
-        // bt_conn_le_data_len_update(conn, NULL);
-        // bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
+    int sec_rc = bt_conn_set_security(conn, BT_SECURITY_L2);
+    if (sec_rc) {
+        LOG_DBG("bt_conn_set_security rc=%d", sec_rc);
+        /* можно попытаться discovery сразу, если peripheral не требует security
+         */
+        start_discovery(conn);
+    } else {
+        /* дождёмся security_changed и запустим discovery там */
     }
-
-    ykb_connected = true;
-    start_discovery(conn);
 }
 
 static void peer_disconnected(struct bt_conn *conn, uint8_t reason) {
@@ -300,10 +295,24 @@ static void peer_disconnected(struct bt_conn *conn, uint8_t reason) {
         bt_le_scan_start(BT_LE_SCAN_ACTIVE, device_found);
     }
 }
-
+static void security_changed(struct bt_conn *conn, bt_security_t level,
+                             enum bt_security_err err) {
+    if (conn != master_conn)
+        return;
+    if (err) {
+        LOG_ERR("security failed: %d", err);
+        return;
+    }
+    if (level >= BT_SECURITY_L2) {
+        LOG_INF("security OK, starting discovery");
+        ykb_connected = true;
+        start_discovery(conn);
+    }
+}
 BT_CONN_CB_DEFINE(slave_central_cb) = {
     .connected = peer_connected,
     .disconnected = peer_disconnected,
+    .security_changed = security_changed,
 };
 
 /* Public: start central link logic from bt_ready() in bt_connect.c */

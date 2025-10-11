@@ -1,4 +1,3 @@
-#include <lib/connect/bt_connect.h>
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -6,14 +5,13 @@
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/uuid.h>
-
 #if CONFIG_BT_INTER_KB_COMM
 #include "inter_kb_comm/inter_kb_comm.h"
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER
 #include "inter_kb_comm/master.h"
 #endif
-
+#include <lib/connect/bt_connect.h>
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
 #include "inter_kb_comm/slave.h"
 #endif
@@ -137,13 +135,16 @@ static void bt_ready(int err) {
     }
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER
-    err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
-                          ARRAY_SIZE(sd));
-    LOG_INF("adv start rc=%d", err);
+    // err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+    //                       ARRAY_SIZE(sd));
+    // LOG_INF("adv start rc=%d", err);
+    ykb_master_link_start();
+
 #endif // CONFIG_BT_INTER_KB_COMM_SLAVE
 
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
-    /* Slave is central → start scanning/connecting to master’s split service */
+    /* Slave is central → start scanning/connecting to master’s split
+       service */
     ykb_slave_link_start();
 #endif
 

@@ -1,18 +1,23 @@
 #include "inter_kb_comm.h"
 
 #include <lib/connect/bt_connect.h>
-
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/uuid.h>
+#include <zephyr/kernel.h>
 
 #include <string.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
+
+void adv_periodic_resume(bool immediate);
+void adv_periodic_pause(void);
+
+K_MUTEX_DEFINE(report_mutex); /* статически инициализированный mutex */
 
 /* --- Master’s YKB Split Service (Peripheral) ---
  *
@@ -25,16 +30,19 @@ LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
 static uint8_t last_slave_report[8];
 static uint8_t state_tx_value[8];
+static uint8_t ykb_ccc_enabled;
 
 static ssize_t keys_rx_write(struct bt_conn *conn,
                              const struct bt_gatt_attr *attr, const void *buf,
                              uint16_t len, uint16_t offset, uint8_t flags) {
     if (offset != 0 || len != 8) {
+        LOG_WRN("Unexpected KEYS_RX len=%u", len);
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
-
+    LOG_INF("Recive some buffer from slave");
+    k_mutex_lock(&report_mutex, K_MSEC(50));
     memcpy(last_slave_report, buf, 8);
-
+    k_mutex_unlock(&report_mutex);
     /* If you want immediate host update from here, you can trigger a work item
      * that reads local keys, merges, and calls bt_gatt_notify() on the HID
      * char. For now, bt_connect_send() will call ykb_master_merge_reports()
@@ -45,11 +53,9 @@ static ssize_t keys_rx_write(struct bt_conn *conn,
 
 static void state_ccc_cfg_changed(const struct bt_gatt_attr *attr,
                                   uint16_t value) {
-    /* Optional: you can track whether the slave subscribed to STATE_TX here */
-    LOG_INF("Slave %s STATE_TX notifications",
-            (value == BT_GATT_CCC_NOTIFY) ? "enabled" : "disabled");
+    LOG_INF("ykb_ccc_cfg_changed");
+    ykb_ccc_enabled = (value == BT_GATT_CCC_NOTIFY);
 }
-
 /* Attribute layout:
  * 0: Primary Service
  * 1: Char Decl (KEYS_RX)
@@ -83,6 +89,7 @@ int ykb_master_state_notify(const uint8_t payload[8]) {
 void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                               uint8_t report_size) {
     /* OR in modifier byte */
+    k_mutex_lock(&report_mutex, K_MSEC(50));
     report[0] |= last_slave_report[0];
 
     /* If NKRO isn't used, fill empty slots with slave keycodes (2..7) */
@@ -112,6 +119,7 @@ void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                 break;
         }
     }
+    k_mutex_unlock(&report_mutex);
 }
 
 #include <stdatomic.h>
@@ -136,29 +144,37 @@ static const struct bt_data sd[] = {
 static void try_resume_advertising(void) {
     /* If we still have spare connection objects, resume advertising. */
     if (atomic_get(&periph_conn_count) < CONFIG_BT_MAX_CONN) {
-        int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+        int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd,
                                  ARRAY_SIZE(sd));
-        if (rc && rc != -EALREADY) {
-            LOG_WRN("adv resume failed rc=%d", rc);
+        if (rc == -EALREADY) {
+            LOG_WRN("adv_resuming failed: adv already going");
+        } else if (rc) {
+            LOG_WRN("adv resume failed:  rc=%d", rc);
         } else {
-            LOG_INF("adv resumed");
+            LOG_INF("adv resumed successfuly");
         }
+    } else {
+        LOG_INF("Already MAX conenctions: %d", atomic_get(&periph_conn_count));
     }
 }
 
 static void conn_connected(struct bt_conn *conn, uint8_t err) {
+
     struct bt_conn_info info;
     if (bt_conn_get_info(conn, &info)) {
         return;
     }
 
-    /* Only count when we are the peripheral on this link (host<->master,
-     * slave<->master) */
-    if (!err && info.role == BT_CONN_ROLE_PERIPHERAL) {
+    if (!err) {
         atomic_inc(&periph_conn_count);
-        /* Immediately try to resume advertising for the next central */
-        try_resume_advertising();
+        // int er = bt_le_adv_stop();
+        // if (er)
+        //     LOG_INF("Failed to stop advertising: rc= %d", er);
+        adv_periodic_pause();
+        LOG_INF("Seems like we have a connection");
+        return;
     }
+    LOG_INF("Someone want to connect but we refuse because: %d", err);
 }
 
 static void conn_disconnected(struct bt_conn *conn, uint8_t reason) {
@@ -166,24 +182,100 @@ static void conn_disconnected(struct bt_conn *conn, uint8_t reason) {
     if (bt_conn_get_info(conn, &info)) {
         return;
     }
+    char addr[BT_ADDR_LE_STR_LEN];
 
-    if (info.role == BT_CONN_ROLE_PERIPHERAL) {
-        int newv =
-            atomic_sub(&periph_conn_count, 1) - 1; /* returns old value */
-        (void)newv;
-        /* After a peripheral link drops, resume advertising (if not already) */
-        try_resume_advertising();
-    }
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+    LOG_INF("Disconnected from %s, reason 0x%02x %s", addr, reason,
+            bt_hci_err_to_str(reason));
+    atomic_dec(&periph_conn_count);
+    adv_periodic_resume(false);
 }
 
-/* Optional: also use .recycled to resume if we ran out of conn objects */
-static void conn_recycled(void) {
-    try_resume_advertising();
+static void security_changed(struct bt_conn *conn, bt_security_t level,
+                             enum bt_security_err err) {
+    char addr[BT_ADDR_LE_STR_LEN];
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+    if (err) {
+        LOG_ERR("Security failed for %s: level %u err %d", addr, level, err);
+        return;
+    }
+
+    LOG_INF("Security level updated for %s: level %u", addr, level);
+
+    if (atomic_get(&periph_conn_count) < CONFIG_BT_MAX_CONN)
+        adv_periodic_resume(false);
+    if (level >= BT_SECURITY_L2) {
+    }
 }
 
 BT_CONN_CB_DEFINE(periph_adv_cb) = {
     .connected = conn_connected,
     .disconnected = conn_disconnected,
-    .recycled =
-        conn_recycled, /* requires a Zephyr version that supports .recycled */
+    .security_changed = security_changed,
 };
+
+#define ADV_PERIOD_MS 1000
+
+static struct k_work_delayable adv_resume_work;
+static atomic_t adv_paused = ATOMIC_INIT(0); /* 0 == running, 1 == paused
+
+/* Обработчик delayable work */
+static void adv_resume_work_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+
+    /* Попытка возобновить рекламу */
+    try_resume_advertising();
+
+    /* Если не на паузе, запланировать следующий запуск */
+    if (!atomic_get(&adv_paused)) {
+        k_work_schedule(&adv_resume_work, K_MSEC(ADV_PERIOD_MS));
+    } else {
+        LOG_DBG("adv periodic paused; not rescheduling");
+    }
+}
+
+/* Инициализация — вызвать один раз (например в bt_ready или init) */
+void adv_periodic_init(void) {
+    k_work_init_delayable(&adv_resume_work, adv_resume_work_handler);
+}
+
+/* Запустить цикл: первый запуск через ADV_PERIOD_MS (или K_NO_WAIT для
+ * немедленно) */
+void adv_periodic_start(bool immediate) {
+    atomic_set(&adv_paused, 0);
+    if (immediate) {
+        k_work_schedule(&adv_resume_work, K_NO_WAIT);
+    } else {
+        k_work_schedule(&adv_resume_work, K_MSEC(ADV_PERIOD_MS));
+    }
+}
+
+/* Приостановить (останавливает дальнейшие планирования) */
+void adv_periodic_pause(void) {
+    atomic_set(&adv_paused, 1);
+    /* отменим уже запланированную работу, чтобы она не сработала позже */
+    (void)k_work_cancel_delayable(&adv_resume_work);
+}
+
+/* Возобновить (если был pause) */
+void adv_periodic_resume(bool immediate) {
+    /* снять паузу и (при нужде) запланировать */
+    atomic_set(&adv_paused, 0);
+    if (immediate) {
+        k_work_schedule(&adv_resume_work, K_NO_WAIT);
+    } else {
+        k_work_schedule(&adv_resume_work, K_MSEC(ADV_PERIOD_MS));
+    }
+}
+
+/* Полная остановка */
+void adv_periodic_stop(void) {
+    atomic_set(&adv_paused, 1);
+    (void)k_work_cancel_delayable(&adv_resume_work);
+}
+
+void ykb_master_link_start() {
+    adv_periodic_init();
+    adv_periodic_start(true);
+}

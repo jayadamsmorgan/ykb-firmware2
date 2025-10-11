@@ -25,13 +25,16 @@ if BOARD_CHOCO_V1
             default 6
         
         config BT_PERIPHERAL_PREF_MAX_INT
-            default 12
+            default 24
         
         config BT_PERIPHERAL_PREF_LATENCY
             default 0 
         
         config BT_PERIPHERAL_PREF_TIMEOUT
             default 400
+
+        config  BT_GAP_AUTO_UPDATE_CONN_PARAMS
+            default y
 
     endif # BT_INTER_KB_COMM_MASTER
     
@@ -42,14 +45,11 @@ if BOARD_CHOCO_V1
 
         config BT_GATT_CLIENT
             default y
-
-        config BT_FILTER_ACCEPT_LIST
-            default y
-
+        
         config BT_SCAN_WITH_IDENTITY
             default y
    
-        endif # BT_INTER_KB_COMM_SLAVE
+    endif # BT_INTER_KB_COMM_SLAVE
     
     if YKB_USB_ENABLED
 
@@ -80,7 +80,6 @@ if BOARD_CHOCO_V1
 
         config BT_MAX_CONN
             default 2
-
     endif # YKB_BT_ENABLED
 
     if YKB_RIGHT

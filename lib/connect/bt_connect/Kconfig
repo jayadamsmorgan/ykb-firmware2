@@ -4,11 +4,12 @@ config LIB_BT_CONNECT
     depends on YKB_BT_ENABLED
     select BT
     select BT_SMP
+    select BT_PRIVACY
     select BT_BONDABLE
     select SETTINGS
     select BT_SETTINGS
+    select BT_KEYS_OVERWRITE_OLDEST 
     select BT_HCI_ERR_TO_STR
-    # select BT_GAP_AUTO_UPDATE_CONN_PARAMS
     help
         This option enables the 'BTConnect' library.
 
