@@ -243,10 +243,10 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi,
     LOG_INF("Found master advertising split UUID; connecting...");
 
     const struct bt_le_conn_param conn_param = {
-        .interval_min = 6,
+        .interval_min = 12,
         .interval_max = 24,
-        .latency = 0,
-        .timeout = 400, /* 4 s */
+        .latency = 4,
+        .timeout = 600, /* 4 s */
     };
 
     bt_le_scan_stop();

@@ -22,16 +22,16 @@ if BOARD_CHOCO_V1
             default y
         
         config BT_PERIPHERAL_PREF_MIN_INT
-            default 6
+            default 12
         
         config BT_PERIPHERAL_PREF_MAX_INT
             default 24
         
         config BT_PERIPHERAL_PREF_LATENCY
-            default 0 
+            default 4 
         
         config BT_PERIPHERAL_PREF_TIMEOUT
-            default 400
+            default 600
 
         config  BT_GAP_AUTO_UPDATE_CONN_PARAMS
             default y
