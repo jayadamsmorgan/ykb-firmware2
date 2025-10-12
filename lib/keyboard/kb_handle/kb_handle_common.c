@@ -90,11 +90,8 @@ bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
     return true;
 }
 
-static bool fn_pressed = false;
 static uint8_t fn_buff[CONFIG_KB_FN_KEYSTROKE_MAX_KEYS] = {0};
 static uint8_t fn_buff_size = 0;
-
-static bool layer_select = false;
 
 static void process_fn_buff() {
     if (fn_buff_size == 0)
@@ -113,77 +110,78 @@ static void process_fn_buff() {
     }
 }
 
-void on_press_default(uint8_t *mappings, uint16_t key_index,
+static const uint16_t modifier_map[] = {
+    MOD_LCTRL, MOD_LSHIFT, MOD_LALT, MOD_LGUI,   MOD_RCTRL, MOD_RSHIFT,
+    MOD_RALT,  MOD_RGUI,   MOD_LFN,  MOD_LLAYER, MOD_RFN,   MOD_RLAYER,
+};
+
+static const char *modifier_to_str_map[] = {
+    "MOD_LCTRL", "MOD_LSHIFT", "MOD_LALT", "MOD_LGUI",
+    "MOD_RCTRL", "MOD_RSHIFT", "MOD_RALT", "MOD_RGUI",
+    "MOD_LFN",   "MOD_LLAYER", "MOD_RFN",  "MOD_RLAYER",
+};
+
+static uint16_t current_modifiers = 0;
+
+static bool fn_pressed() {
+    return ((current_modifiers & MOD_LFN) == MOD_LFN) ||
+           ((current_modifiers & MOD_RFN) == MOD_RFN);
+};
+
+void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
                       kb_settings_t *settings) {
 
-    uint8_t code =
-        mappings[settings->layer_index * CONFIG_KB_KEY_COUNT + key_index];
+    uint8_t code;
+    bool needs_shift;
+    if (!kb_mapping_translate_key(&mappings[key_index], current_modifiers,
+                                  &code, &needs_shift)) {
+        LOG_DBG("No rule found for key with index %d", key_index);
+        return;
+    }
+
+    if (code >= KEY_LEFTCONTROL && code <= KEY_RIGHTLAYER) {
+
+        if (code == KEY_LEFTFN || code == KEY_RIGHTFN)
+            fn_buff_size = 0;
+
+        current_modifiers |= modifier_map[code - KEY_LEFTCONTROL];
+        LOG_DBG("Key with index %d ('%s') pressed", key_index,
+                modifier_to_str_map[code - KEY_LEFTCONTROL]);
+
+        return;
+    }
 
     LOG_DBG("Key with index %d and HID code 0x%X pressed", key_index, code);
 
-    if (code < KEY_FN) {
-        if (fn_pressed && fn_buff_size < CONFIG_KB_FN_KEYSTROKE_MAX_KEYS) {
-            fn_buff[fn_buff_size++] = code;
-            process_fn_buff();
-        } else if (layer_select && code >= KEY_1_EXCLAMATION &&
-                   code <= KEY_0_RPAREN) {
-            uint8_t layer_index = code - KEY_1_EXCLAMATION;
-            if (layer_index < settings->layer_count) {
-                settings->layer_index = layer_index;
-            }
-        } else {
-            return;
-        }
-
-    } else if (code == KEY_FN) {
-
-        fn_pressed = true;
+    if (code < KEY_LEFTCONTROL && fn_pressed() &&
+        fn_buff_size < CONFIG_KB_FN_KEYSTROKE_MAX_KEYS) {
+        fn_buff[fn_buff_size++] = code;
+        process_fn_buff();
         return;
-
-    } else if (code >= KEY_LAYER_NEXT && settings->layer_count > 1) {
-
-        switch (code) {
-        case KEY_LAYER_NEXT:
-            settings->layer_index =
-                (settings->layer_index + 1) % settings->layer_count;
-            break;
-        case KEY_LAYER_PREV:
-            settings->layer_index =
-                (settings->layer_index - 1) % settings->layer_count;
-            break;
-        case KEY_LAYER_SEL:
-            layer_select = true;
-            break;
-        case KEY_LAYER_1:
-            settings->layer_index = 0;
-            break;
-        case KEY_LAYER_2:
-            settings->layer_index = 1;
-            break;
-        case KEY_LAYER_3:
-            if (settings->layer_count >= 3)
-                settings->layer_index = 2;
-            break;
-        default:
-            LOG_ERR("Unknown key code 0x%X", code);
-            break;
-        }
     }
 }
 
-void on_release_default(uint8_t *mappings, uint16_t key_index,
+void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
                         kb_settings_t *settings) {
 
-    uint8_t code =
-        mappings[settings->layer_index * CONFIG_KB_KEY_COUNT + key_index];
+    uint8_t code;
+    bool needs_shift;
+    if (!kb_mapping_translate_key(&mappings[key_index], current_modifiers,
+                                  &code, &needs_shift)) {
+        LOG_DBG("No rule found for key with index %d", key_index);
+        return;
+    }
+
+    if (code >= KEY_LEFTCONTROL && code <= KEY_RIGHTLAYER) {
+        current_modifiers |= modifier_map[code - KEY_LEFTCONTROL];
+        LOG_DBG("Key with index %d ('%s') pressed", key_index,
+                modifier_to_str_map[code - KEY_LEFTCONTROL]);
+        return;
+    }
+
     LOG_DBG("Key with index %d and HID code 0x%X released", key_index, code);
 
-    if (code == KEY_LAYER_SEL) {
-        layer_select = false;
-    } else if (code == KEY_FN) {
-        fn_pressed = false;
-        fn_buff_size = 0;
-    } else if (fn_pressed && fn_buff_size > 0) {
+    if (fn_pressed() && fn_buff_size > 0) {
         uint8_t i = 0;
         for (i = 0; i < fn_buff_size; ++i) {
             if (fn_buff[i] == code) {
@@ -213,31 +211,39 @@ void handle_bl_on_event(uint8_t key_index, kb_settings_t *settings,
 static uint8_t report[8];
 static uint8_t report_size = 0;
 
-static const uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
-                                        0x10, 0x20, 0x40, 0x80};
-
 void clear_hid_report() {
     memset(report, 0, 8);
     report_size = 0;
 }
 
-void build_hid_report_from_bitmap(uint8_t *mappings, kb_settings_t *settings,
+void build_hid_report_from_bitmap(kb_key_rules_t *mappings,
+                                  kb_settings_t *settings,
                                   uint32_t *curr_down) {
     // Modifiers + up to 6 keys
     for (uint16_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
+
+        if (report_size == 6)
+            return;
+
         if (!bm_test(curr_down, i))
             continue;
 
-        uint8_t code =
-            mappings[settings->layer_index * CONFIG_KB_KEY_COUNT + i];
+        uint8_t code;
+        bool needs_shift;
+        if (!kb_mapping_translate_key(&mappings[i], current_modifiers, &code,
+                                      &needs_shift)) {
+            continue;
+        };
+        if (code >= KEY_LEFTCONTROL)
+            continue;
 
-        if (code < KEY_LEFTCONTROL) {
-            if (report_size < 6) {
-                report[2 + report_size++] = code;
-            }
-        } else if (code < KEY_FN) {
-            report[0] |= modifier_map[code - KEY_LEFTCONTROL];
+        memcpy(report, &current_modifiers, 1);
+        if (needs_shift && ((current_modifiers & MOD_ANYSHIFT) != 0)) {
+            report[0] |= MOD_LSHIFT;
         }
+
+        if (report_size < 6)
+            report[2 + report_size++] = code;
     }
 }
 

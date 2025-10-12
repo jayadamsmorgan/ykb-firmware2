@@ -21,9 +21,9 @@ typedef struct {
     uint16_t minimums[CONFIG_KB_KEY_COUNT];
     uint16_t maximums[CONFIG_KB_KEY_COUNT];
 
-    kb_map_rule_t mappings[CONFIG_KB_KEY_COUNT];
+    kb_key_rules_t mappings[CONFIG_KB_KEY_COUNT];
 #if CONFIG_BT_INTER_KB_COMM_MASTER
-    kb_map_rule_t mappings_slave[CONFIG_KB_KEY_COUNT_SLAVE];
+    kb_key_rules_t mappings_slave[CONFIG_KB_KEY_COUNT_SLAVE];
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
 
 } kb_settings_t;

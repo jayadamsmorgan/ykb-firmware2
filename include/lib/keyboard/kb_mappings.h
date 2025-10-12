@@ -98,17 +98,6 @@ typedef struct {
 #define DEFAULT_KEYMAP_DEFINE(...)                                             \
     static const kb_key_rules_t DEFAULT_KEYMAP[KEYMAP_SIZE] = {__VA_ARGS__}
 
-#if CONFIG_YKB_SPLIT
-#if CONFIG_YKB_RIGHT
-#define GET_MAPPINGS(SETTINGS) SETTINGS->right_mappings
-#endif // CONFIG_YKB_RIGHT
-#if CONFIG_YKB_LEFT
-#define GET_MAPPINGS(SETTINGS) SETTINGS->left_mappings
-#endif // CONFIG_YKB_LEFT
-#else
-#define GET_MAPPINGS(SETTINGS) SETTINGS->mappings
-#endif // CONFIG_YKB_SPLIT
-
 // Translate one physical key given context.
 // Writes result HID code into 'out'
 //

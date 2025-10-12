@@ -57,26 +57,24 @@ static void kb_settings_load_default(void) {
 #if CONFIG_YKB_SPLIT
     // Left mappings come first in DEFAULT_KEYMAP
 #if CONFIG_YKB_LEFT
-    memcpy(settings.mappings, DEFAULT_KEYMAP,
-           sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT);
+    memcpy(settings.mappings, DEFAULT_KEYMAP, sizeof(settings.mappings));
 #endif // CONFIG_YKB_LEFT
 #if CONFIG_YKB_RIGHT
     memcpy(settings.mappings, &DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
-           sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT)
+           sizeof(settings.mappings));
 #endif // CONFIG_YKB_LEFT
 #else
-    memcpy(settings.mappings, DEFAULT_KEYMAP, sizeof(DEFAULT_KEYMAP));
+    memcpy(settings.mappings, DEFAULT_KEYMAP, sizeof(settings.mappings));
 #endif // CONFIG_YKB_SPLIT
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER
 #if CONFIG_YKB_LEFT
-        memcpy(settings.mappings_slave,
-               &DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
-               sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT);
+    memcpy(settings.mappings_slave, &DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
+           sizeof(settings.mappings_slave));
 #endif // CONFIG_YKB_LEFT
 #if CONFIG_YKB_RIGHT
     memcpy(settings.mappings_slave, DEFAULT_KEYMAP,
-           sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT);
+           sizeof(settings.mappings_slave));
 #endif // CONFIG_YKB_RIGHT
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
 

@@ -22,8 +22,8 @@ void handle_bl_on_event(uint8_t key_index, kb_settings_t *settings,
 void clear_hid_report();
 
 // Fill out HID report with currently pressed keys based on 'mappings'
-void build_hid_report_from_bitmap(uint8_t *mappings, kb_settings_t *settings,
-                                  uint32_t *curr_down);
+void build_hid_report_from_bitmap(kb_key_rules_t *mappings,
+                                  kb_settings_t *settings, uint32_t *curr_down);
 
 // Send HID report where possible
 void handle_hid_report();
@@ -42,7 +42,7 @@ void edge_detection(kb_settings_t *settings, uint32_t *prev_down,
 //  - handle layer switches
 //
 // Should be called from on_press passed to 'edge_detection' if needed
-void on_press_default(uint8_t *mappings, uint16_t key_index,
+void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
                       kb_settings_t *settings);
 
 // Default behaviour for on_release:
@@ -50,7 +50,7 @@ void on_press_default(uint8_t *mappings, uint16_t key_index,
 //  - handle layer switches
 //
 // Should be called from on_release passed to 'edge_detection' if needed
-void on_release_default(uint8_t *mappings, uint16_t key_index,
+void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
                         kb_settings_t *settings);
 
 #endif // KB_HANDLE_COMMON_H_
