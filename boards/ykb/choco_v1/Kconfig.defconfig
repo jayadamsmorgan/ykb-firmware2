@@ -81,7 +81,27 @@ if BOARD_CHOCO_V1
         config BT_MAX_CONN
             default 2
     endif # YKB_BT_ENABLED
+    if BT_INTER_KB_COMM
 
+        config BT_L2CAP_DYNAMIC_CHANNEL
+            default y
+
+        config BT_L2CAP_ECRED
+            default y
+
+        config BT_BUF_ACL_RX_SIZE
+            default 256
+
+        config BT_BUF_ACL_TX_SIZE
+            default 256
+
+        config BT_BUF_ACL_TX_COUNT
+            default 10
+
+        config BT_BUF_EVT_RX_COUNT
+            default 16
+    
+    endif # YKB_INTER_KB_COM
     if YKB_RIGHT
 
         config YKB_USBD_PRODUCT

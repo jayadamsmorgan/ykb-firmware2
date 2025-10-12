@@ -10,12 +10,17 @@
 #include <zephyr/kernel.h>
 
 #include <string.h>
+#include <zephyr/bluetooth/l2cap.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
 void adv_periodic_resume(bool immediate);
 void adv_periodic_pause(void);
+void ykb_master_l2cap_server_init(void);
+#define YKB_L2CAP_PSM 0x0080
+// L2CAP max size in bytes
+#define YKB_L2CAP_MTU 8
 
 K_MUTEX_DEFINE(report_mutex); /* статически инициализированный mutex */
 
@@ -27,35 +32,40 @@ K_MUTEX_DEFINE(report_mutex); /* статически инициализиров
  * - STATE_TX (UUID ...0003): Notify (8 bytes)
  *   Master notifies LED/mode info down to slave.
  */
+static struct bt_conn *host_conn = NULL;
+static struct bt_conn *slave_conn = NULL;
 
+static atomic_t host_connected = ATOMIC_INIT(0);
+
+static atomic_t slave_conn_connected = ATOMIC_INIT(0);
+static atomic_t slave_chan_connected = ATOMIC_INIT(0);
+
+static atomic_t slave_connection = ATOMIC_INIT(0);
 static uint8_t last_slave_report[8];
 static uint8_t state_tx_value[8];
 static uint8_t ykb_ccc_enabled;
 
-static ssize_t keys_rx_write(struct bt_conn *conn,
-                             const struct bt_gatt_attr *attr, const void *buf,
-                             uint16_t len, uint16_t offset, uint8_t flags) {
-    if (offset != 0 || len != 8) {
-        LOG_WRN("Unexpected KEYS_RX len=%u", len);
-        return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
-    }
-    LOG_INF("Recive some buffer from slave");
-    k_mutex_lock(&report_mutex, K_MSEC(50));
-    memcpy(last_slave_report, buf, 8);
-    k_mutex_unlock(&report_mutex);
-    /* If you want immediate host update from here, you can trigger a work item
-     * that reads local keys, merges, and calls bt_gatt_notify() on the HID
-     * char. For now, bt_connect_send() will call ykb_master_merge_reports()
-     * when sending.
-     */
-    return len;
-}
+// static ssize_t keys_rx_write(struct bt_conn *conn,
+//                              const struct bt_gatt_attr *attr, const void
+//                              *buf, uint16_t len, uint16_t offset, uint8_t
+//                              flags) {
+//     if (offset != 0 || len != 8) {
+//         LOG_WRN("Unexpected KEYS_RX len=%u", len);
+//         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+//     }
+//     LOG_INF("Recive some buffer from slave");
+//     k_mutex_lock(&report_mutex, K_MSEC(50));
+//     memcpy(last_slave_report, buf, 8);
+//     k_mutex_unlock(&report_mutex);
+//
+//     return len;
+// }
 
-static void state_ccc_cfg_changed(const struct bt_gatt_attr *attr,
-                                  uint16_t value) {
-    LOG_INF("ykb_ccc_cfg_changed");
-    ykb_ccc_enabled = (value == BT_GATT_CCC_NOTIFY);
-}
+// static void state_ccc_cfg_changed(const struct bt_gatt_attr *attr,
+//                                   uint16_t value) {
+//     LOG_INF("ykb_ccc_cfg_changed");
+//     ykb_ccc_enabled = (value == BT_GATT_CCC_NOTIFY);
+// }
 /* Attribute layout:
  * 0: Primary Service
  * 1: Char Decl (KEYS_RX)
@@ -64,25 +74,26 @@ static void state_ccc_cfg_changed(const struct bt_gatt_attr *attr,
  * 4: Char Value (STATE_TX)
  * 5: CCC for STATE_TX
  */
-BT_GATT_SERVICE_DEFINE(
-    ykb_split_svc, BT_GATT_PRIMARY_SERVICE(&YKB_SPLIT_SVC_UUID),
-
-    /* KEYS_RX: central writes 8B to us (Write Without Response) */
-    BT_GATT_CHARACTERISTIC(&YKB_KEYS_RX_UUID.uuid,
-                           BT_GATT_CHRC_WRITE_WITHOUT_RESP, BT_GATT_PERM_WRITE,
-                           NULL, keys_rx_write, NULL),
-
-    /* STATE_TX: we notify slave (8B payload) */
-    BT_GATT_CHARACTERISTIC(&YKB_STATE_TX_UUID.uuid, BT_GATT_CHRC_NOTIFY,
-                           BT_GATT_PERM_NONE, NULL, NULL, state_tx_value),
-    BT_GATT_CCC(state_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
-
-/* Push state (e.g., LED/CapsLock) down to slave (optional helper) */
-int ykb_master_state_notify(const uint8_t payload[8]) {
-    memcpy(state_tx_value, payload, 8);
-    /* value handle for STATE_TX is ykb_split_svc.attrs[4] */
-    return bt_gatt_notify(NULL, &ykb_split_svc.attrs[4], state_tx_value, 8);
-}
+// BT_GATT_SERVICE_DEFINE(
+//     ykb_split_svc, BT_GATT_PRIMARY_SERVICE(&YKB_SPLIT_SVC_UUID),
+//
+//     /* KEYS_RX: central writes 8B to us (Write Without Response) */
+//     BT_GATT_CHARACTERISTIC(&YKB_KEYS_RX_UUID.uuid,
+//                            BT_GATT_CHRC_WRITE_WITHOUT_RESP,
+//                            BT_GATT_PERM_WRITE, NULL, keys_rx_write, NULL),
+//
+//     /* STATE_TX: we notify slave (8B payload) */
+//     BT_GATT_CHARACTERISTIC(&YKB_STATE_TX_UUID.uuid, BT_GATT_CHRC_NOTIFY,
+//                            BT_GATT_PERM_NONE, NULL, NULL, state_tx_value),
+//     BT_GATT_CCC(state_ccc_cfg_changed, BT_GATT_PERM_READ |
+//     BT_GATT_PERM_WRITE));
+//
+// /* Push state (e.g., LED/CapsLock) down to slave (optional helper) */
+// int ykb_master_state_notify(const uint8_t payload[8]) {
+//     memcpy(state_tx_value, payload, 8);
+//     /* value handle for STATE_TX is ykb_split_svc.attrs[4] */
+//     return bt_gatt_notify(NULL, &ykb_split_svc.attrs[4], state_tx_value, 8);
+// }
 
 /* Merge the slave’s last 8-byte report into 'report' (local) before sending to
  * host */
@@ -276,6 +287,84 @@ void adv_periodic_stop(void) {
 }
 
 void ykb_master_link_start() {
+    ykb_master_l2cap_server_init();
     adv_periodic_init();
     adv_periodic_start(true);
+}
+
+/*-------------L2CAP--------------------*/
+
+// Channel for L2CAP connection
+static struct bt_l2cap_le_chan ykb_l2cap_slave_chan;
+
+// --- L2CAP Callbacks и Сервер для слейва ---
+static int ykb_l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf) {
+    // Получены данные от слейв-платы
+    if (buf->len == BT_CONNECT_HID_REPORT_COUNT) {
+        memcpy(last_slave_report, buf->data, BT_CONNECT_HID_REPORT_COUNT);
+        LOG_DBG("Received slave report: %s",
+                bt_hex(last_slave_report, BT_CONNECT_HID_REPORT_COUNT));
+    } else {
+        LOG_WRN("Received L2CAP data of unexpected length: %u", buf->len);
+    }
+    net_buf_unref(buf);
+}
+
+static void ykb_l2cap_connected(struct bt_l2cap_chan *chan) {
+    LOG_INF("L2CAP channel connected from slave");
+    // Соединение L2CAP успешно установлено.
+    // Теперь можно отправлять данные на мастер-плату.
+}
+
+static void ykb_l2cap_disconnected(struct bt_l2cap_chan *chan) {
+    LOG_INF("L2CAP channel disconnected from slave");
+    // L2CAP канал разорван.
+    // Нужно убедиться, что slave_conn обнуляется при отключении базового
+    // BLE-соединения
+}
+
+// Операции для L2CAP канала
+static struct bt_l2cap_chan_ops l2cap_slave_ops = {
+    .connected = ykb_l2cap_connected,
+    .disconnected = ykb_l2cap_disconnected,
+    .recv = ykb_l2cap_recv,
+};
+
+// Callback для принятия входящего L2CAP-канала
+static int ykb_l2cap_accept(struct bt_conn *conn,
+                            struct bt_l2cap_server *server,
+                            struct bt_l2cap_chan **chan) {
+    // Проверяем, это ли соединение от слейва
+    if (conn != slave_conn) {
+        LOG_INF("New L2CAP connection but we still have previous slave_conn");
+    }
+    memset(&ykb_l2cap_slave_chan, 0, sizeof(ykb_l2cap_slave_chan));
+
+    /* Важно: вернуть указатель на внутреннее поле .chan */
+    ykb_l2cap_slave_chan.chan.ops =
+        &l2cap_slave_ops; /* Если структура вложена: .chan.chan */
+    /* В зависимости от версии API может быть просто
+       ykb_l2cap_slave_chan.chan.ops = &...; проверь, у тебя вложенность:
+       bt_l2cap_le_chan.chan (struct bt_l2cap_chan) */
+
+    *chan = &ykb_l2cap_slave_chan.chan; /* возвращаем struct bt_l2cap_chan *
+    // */
+    LOG_INF("L2CAP connectiont accepted");
+    return 0;
+}
+
+// L2CAP сервер
+static struct bt_l2cap_server l2cap_ykb_server = {
+    .psm = YKB_L2CAP_PSM,
+    .accept = ykb_l2cap_accept,
+};
+
+// Функция инициализации L2CAP сервера
+void ykb_master_l2cap_server_init(void) {
+    int err = bt_l2cap_server_register(&l2cap_ykb_server);
+    if (err) {
+        LOG_ERR("Failed to register L2CAP server (err %d)", err);
+    } else {
+        LOG_INF("L2CAP server registered, PSM: %d", YKB_L2CAP_PSM);
+    }
 }
