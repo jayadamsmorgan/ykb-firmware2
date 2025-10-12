@@ -11,14 +11,6 @@ LOG_MODULE_REGISTER(kb_settings, CONFIG_KB_SETTINGS_LOG_LEVEL);
 
 #include YKB_DEF_MAPPINGS_PATH
 
-#define DEF_MAP DEFAULT_MAPPINGS
-
-BUILD_ASSERT(sizeof DEF_MAP != 0, "Mappings are empty.");
-
-BUILD_ASSERT(
-    MAPPINGS_LAYER_COUNT <= CONFIG_KB_MAX_LAYERS_SUPPORTED,
-    "Amount of default mapping layers exceeds CONFIG_KB_MAX_LAYERS_SUPPORTED");
-
 BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
                  CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM,
              "Default value for key not pressed should be less than default "
@@ -60,11 +52,33 @@ static void kb_settings_load_default(void) {
         settings.maximums[i] = CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM;
     }
 
-    settings.layer_count = MAPPINGS_LAYER_COUNT;
-    settings.layer_index = 0;
     settings.mode = KB_MODE_NORMAL;
 
-    memcpy(settings.mappings, DEF_MAP, sizeof(DEF_MAP));
+#if CONFIG_YKB_SPLIT
+    // Left mappings come first in DEFAULT_KEYMAP
+#if CONFIG_YKB_LEFT
+    memcpy(settings.mappings, DEFAULT_KEYMAP,
+           sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT);
+#endif // CONFIG_YKB_LEFT
+#if CONFIG_YKB_RIGHT
+    memcpy(settings.mappings, &DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
+           sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT)
+#endif // CONFIG_YKB_LEFT
+#else
+    memcpy(settings.mappings, DEFAULT_KEYMAP, sizeof(DEFAULT_KEYMAP));
+#endif // CONFIG_YKB_SPLIT
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+#if CONFIG_YKB_LEFT
+        memcpy(settings.mappings_slave,
+               &DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
+               sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT);
+#endif // CONFIG_YKB_LEFT
+#if CONFIG_YKB_RIGHT
+    memcpy(settings.mappings_slave, DEFAULT_KEYMAP,
+           sizeof(kb_map_rule_t) * CONFIG_KB_KEY_COUNT);
+#endif // CONFIG_YKB_RIGHT
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
 
     LOG_INF("Loaded keyboard defaults (threshold=%u)",
             (unsigned)((uint16_t)default_threshold));
