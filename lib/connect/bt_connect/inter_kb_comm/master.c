@@ -154,7 +154,7 @@ static const struct bt_data sd[] = {
 
 static void try_resume_advertising(void) {
     /* If we still have spare connection objects, resume advertising. */
-    if (atomic_get(&periph_conn_count) < CONFIG_BT_MAX_CONN) {
+    if (atomic_get(&periph_conn_count) < CONFIG_BT_MAX_CONN - 2) {
         int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd,
                                  ARRAY_SIZE(sd));
         if (rc == -EALREADY) {
@@ -182,7 +182,12 @@ static void conn_connected(struct bt_conn *conn, uint8_t err) {
         // if (er)
         //     LOG_INF("Failed to stop advertising: rc= %d", er);
         adv_periodic_pause();
+
         LOG_INF("Seems like we have a connection");
+        int sec_rc = bt_conn_set_security(conn, BT_SECURITY_L2);
+        if (sec_rc) {
+            LOG_DBG("bt_conn_set_security rc=%d", sec_rc);
+        }
         return;
     }
     LOG_INF("Someone want to connect but we refuse because: %d", err);
@@ -208,7 +213,8 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
     if (err) {
-        LOG_ERR("Security failed for %s: level %u err %d", addr, level, err);
+        LOG_ERR("Security failed for %s: level %u err %s", addr, level,
+                bt_hci_err_to_str(err));
         return;
     }
 
@@ -226,7 +232,7 @@ BT_CONN_CB_DEFINE(periph_adv_cb) = {
     .security_changed = security_changed,
 };
 
-#define ADV_PERIOD_MS 1000
+#define ADV_PERIOD_MS 5000
 
 static struct k_work_delayable adv_resume_work;
 static atomic_t adv_paused = ATOMIC_INIT(0); /* 0 == running, 1 == paused
@@ -335,9 +341,10 @@ static int ykb_l2cap_accept(struct bt_conn *conn,
                             struct bt_l2cap_server *server,
                             struct bt_l2cap_chan **chan) {
     // Проверяем, это ли соединение от слейва
-    if (conn != slave_conn) {
-        LOG_INF("New L2CAP connection but we still have previous slave_conn");
-    }
+    // if (conn != slave_conn) {
+    //     LOG_INF("New L2CAP connection but we still have previous
+    //     slave_conn");
+    // }
     memset(&ykb_l2cap_slave_chan, 0, sizeof(ykb_l2cap_slave_chan));
 
     /* Важно: вернуть указатель на внутреннее поле .chan */
@@ -347,8 +354,7 @@ static int ykb_l2cap_accept(struct bt_conn *conn,
        ykb_l2cap_slave_chan.chan.ops = &...; проверь, у тебя вложенность:
        bt_l2cap_le_chan.chan (struct bt_l2cap_chan) */
 
-    *chan = &ykb_l2cap_slave_chan.chan; /* возвращаем struct bt_l2cap_chan *
-    // */
+    *chan = &ykb_l2cap_slave_chan.chan;
     LOG_INF("L2CAP connectiont accepted");
     return 0;
 }

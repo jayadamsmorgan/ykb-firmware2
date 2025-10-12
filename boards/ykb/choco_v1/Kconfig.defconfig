@@ -79,7 +79,7 @@ if BOARD_CHOCO_V1
             default 10
 
         config BT_MAX_CONN
-            default 2
+            default 4
     endif # YKB_BT_ENABLED
     if BT_INTER_KB_COMM
 

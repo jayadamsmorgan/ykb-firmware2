@@ -157,6 +157,8 @@ int bt_connect_init(void) {
         LOG_ERR("Bluetooth enable failed (err %d)", ret);
         return -1;
     }
+    bt_unpair(BT_ID_DEFAULT, NULL);
+
     return 0;
 }
 

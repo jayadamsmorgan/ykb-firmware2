@@ -17,7 +17,7 @@ LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 #define YKB_DATA_SZ 8
 
 /* Кол-во буферов в пуле — подбери по нагрузке */
-#define L2CAP_TX_POOL_SIZE 4
+#define L2CAP_TX_POOL_SIZE 10
 
 /* Определяем пул — используем макрос для расчёта нужного размера */
 NET_BUF_POOL_DEFINE(ykb_l2cap_tx_pool, L2CAP_TX_POOL_SIZE,
@@ -296,11 +296,15 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     }
     if (level >= BT_SECURITY_L2) {
         LOG_INF("security OK, starting discovery");
-        // bt_conn_ref(master_conn);
+        int rc = bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
+        if (rc) {
+            LOG_ERR("Failed to set 2M PHY: (err %d)", rc);
+            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        }
         conn_connected = true;
         ykb_l2cap_master_chan.chan.ops = &l2cap_master_ops;
-        int rc = bt_l2cap_chan_connect(conn, &ykb_l2cap_master_chan.chan,
-                                       YKB_L2CAP_PSM);
+        rc = bt_l2cap_chan_connect(conn, &ykb_l2cap_master_chan.chan,
+                                   YKB_L2CAP_PSM);
         if (rc) {
             LOG_ERR("Failed to connect L2CAP channel (err %d)", rc);
             bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);

@@ -10,6 +10,7 @@ config LIB_BT_CONNECT
     select BT_SETTINGS
     select BT_KEYS_OVERWRITE_OLDEST 
     select BT_HCI_ERR_TO_STR
+    select BT_USER_PHY_UPDATE
     help
         This option enables the 'BTConnect' library.
 
