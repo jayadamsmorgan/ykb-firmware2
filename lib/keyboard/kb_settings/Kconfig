@@ -23,9 +23,10 @@ menu "Keyboard settings"
 
     endif # !YKB_SPLIT
 
-    config KB_MAX_LAYERS_SUPPORTED
-        int "Maximum amount of layers supported by the keyboard"
-        range 1 10
+    config KB_MAX_RULES_PER_KEY
+        int "Maximum amount of rules per key"
+        help
+          Specify maximum allowed amount of rules per each key in mappings
         default 5
 
     config KB_SETTINGS_DEFAULT_POLLING_RATE

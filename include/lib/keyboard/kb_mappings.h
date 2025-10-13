@@ -61,6 +61,7 @@ enum {
 };
 
 typedef struct {
+    uint16_t mods_mask;
     uint16_t mods_eq;
     uint8_t out_code;
     bool out_shifted;
@@ -71,12 +72,21 @@ typedef struct {
     uint8_t count;
 } kb_key_rules_t;
 
+/* Backward-compatible RULE: mask defaults to 'eq' (exact match only). */
 #define RULE(eq, out, shifted)                                                 \
     (kb_map_rule_t) {                                                          \
-        .mods_eq = (eq), .out_code = (out), .out_shifted = (shifted),          \
+        .mods_eq = (eq), .mods_mask = (eq), .out_code = (out),                 \
+        .out_shifted = (shifted)                                               \
     }
 
-#define RULES_SIMPLE(out) RULE(MOD_ANYSHIFT, out, true), RULE(0, out, false)
+/* Explicit mask version (use this if you ever want eq != mask). */
+#define RULE_MASK(eq, mask, out, shifted)                                      \
+    (kb_map_rule_t) {                                                          \
+        .mods_eq = (eq), .mods_mask = (mask), .out_code = (out),               \
+        .out_shifted = (shifted)                                               \
+    }
+
+#define RULE_SIMPLE(out) RULE(0, out, false)
 
 #define KEY(name)                                                              \
     (kb_key_rules_t) {                                                         \
@@ -108,37 +118,51 @@ static inline bool kb_mapping_translate_key(const kb_key_rules_t *kr,
     for (uint8_t i = 0; i < kr->count; ++i) {
         const kb_map_rule_t *r = &kr->rules[i];
 
-        uint16_t mods_eq = r->mods_eq;
-        uint16_t mask_bits = r->mods_eq; // which bits to care about
+        /* Start from what the rule says: which bits are “exactly compared”. */
+        uint16_t exact_mask = r->mods_mask;
+        uint16_t exact_value = r->mods_eq & exact_mask;
 
-        // Expand "ANY*" sentinels into the actual pressed bits,
-        // and make sure we only compare those bits.
-        if ((mods_eq & MOD_ANYSHIFT) == MOD_ANYSHIFT) {
-            mods_eq = (mods_eq & ~MOD_ANYSHIFT) | (mods_ext & MOD_ANYSHIFT);
-            mask_bits = (mask_bits & ~MOD_ANYSHIFT) | MOD_ANYSHIFT;
+        /* Pull out ANY-groups requested by the rule (we treat them as
+         * “at least one bit of the group must be pressed”, not equality). */
+        uint16_t any_mask = 0;
+
+        if (r->mods_eq & MOD_ANYSHIFT) {
+            any_mask |= MOD_ANYSHIFT;
+            exact_mask &= ~MOD_ANYSHIFT;
         }
-        if ((mods_eq & MOD_ANYLAYER) == MOD_ANYLAYER) {
-            mods_eq = (mods_eq & ~MOD_ANYLAYER) | (mods_ext & MOD_ANYLAYER);
-            mask_bits = (mask_bits & ~MOD_ANYLAYER) | MOD_ANYLAYER;
+        if (r->mods_eq & MOD_ANYCTRL) {
+            any_mask |= MOD_ANYCTRL;
+            exact_mask &= ~MOD_ANYCTRL;
         }
-        if ((mods_eq & MOD_ANYALT) == MOD_ANYALT) {
-            mods_eq = (mods_eq & ~MOD_ANYALT) | (mods_ext & MOD_ANYALT);
-            mask_bits = (mask_bits & ~MOD_ANYALT) | MOD_ANYALT;
+        if (r->mods_eq & MOD_ANYALT) {
+            any_mask |= MOD_ANYALT;
+            exact_mask &= ~MOD_ANYALT;
         }
-        if ((mods_eq & MOD_ANYCTRL) == MOD_ANYCTRL) {
-            mods_eq = (mods_eq & ~MOD_ANYCTRL) | (mods_ext & MOD_ANYCTRL);
-            mask_bits = (mask_bits & ~MOD_ANYCTRL) | MOD_ANYCTRL;
+        if (r->mods_eq & MOD_ANYGUI) {
+            any_mask |= MOD_ANYGUI;
+            exact_mask &= ~MOD_ANYGUI;
         }
-        if ((mods_eq & MOD_ANYFN) == MOD_ANYFN) {
-            mods_eq = (mods_eq & ~MOD_ANYFN) | (mods_ext & MOD_ANYFN);
-            mask_bits = (mask_bits & ~MOD_ANYFN) | MOD_ANYFN;
+        if (r->mods_eq & MOD_ANYFN) {
+            any_mask |= MOD_ANYFN;
+            exact_mask &= ~MOD_ANYFN;
         }
-        if ((mods_eq & MOD_ANYGUI) == MOD_ANYGUI) {
-            mods_eq = (mods_eq & ~MOD_ANYGUI) | (mods_ext & MOD_ANYGUI);
-            mask_bits = (mask_bits & ~MOD_ANYGUI) | MOD_ANYGUI;
+        if (r->mods_eq & MOD_ANYLAYER) {
+            any_mask |= MOD_ANYLAYER;
+            exact_mask &= ~MOD_ANYLAYER;
         }
 
-        if ((mods_ext & mask_bits) == mods_eq) {
+        /* First, exact bits must match exactly… */
+        bool exact_ok = ((mods_ext & exact_mask) == exact_value);
+
+        /* …then, for each ANY-group requested, at least one bit of the group
+         * must be present. If no ANY-group is requested, this reduces to true.
+         */
+        bool any_ok = true;
+        if (any_mask) {
+            any_ok = (mods_ext & any_mask) != 0;
+        }
+
+        if (exact_ok && any_ok) {
             *out = r->out_code;
             *needs_shift = r->out_shifted;
             return true;

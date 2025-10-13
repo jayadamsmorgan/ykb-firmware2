@@ -1,6 +1,6 @@
 #include <lib/led/kb_backlight.h>
 
-#include <lib/keyboard/mappings/mappings.h>
+#include <lib/keyboard/kb_mappings.h>
 
 #include <lib/led/kb_bl_mode.h>
 

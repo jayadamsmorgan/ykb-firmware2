@@ -1,7 +1,7 @@
 #ifndef KB_LEDS_GEOM_H
 #define KB_LEDS_GEOM_H
 
-#include <lib/keyboard/mappings/mappings.h>
+#include <lib/keyboard/kb_mappings.h>
 
 #include <stdbool.h>
 #include <stddef.h>

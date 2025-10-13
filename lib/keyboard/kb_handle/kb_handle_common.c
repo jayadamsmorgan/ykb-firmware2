@@ -173,7 +173,7 @@ void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
     }
 
     if (code >= KEY_LEFTCONTROL && code <= KEY_RIGHTLAYER) {
-        current_modifiers |= modifier_map[code - KEY_LEFTCONTROL];
+        current_modifiers &= ~modifier_map[code - KEY_LEFTCONTROL];
         LOG_DBG("Key with index %d ('%s') pressed", key_index,
                 modifier_to_str_map[code - KEY_LEFTCONTROL]);
         return;
@@ -220,6 +220,7 @@ void build_hid_report_from_bitmap(kb_key_rules_t *mappings,
                                   kb_settings_t *settings,
                                   uint32_t *curr_down) {
     // Modifiers + up to 6 keys
+    memcpy(report, &current_modifiers, 1);
     for (uint16_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
 
         if (report_size == 6)
@@ -237,8 +238,7 @@ void build_hid_report_from_bitmap(kb_key_rules_t *mappings,
         if (code >= KEY_LEFTCONTROL)
             continue;
 
-        memcpy(report, &current_modifiers, 1);
-        if (needs_shift && ((current_modifiers & MOD_ANYSHIFT) != 0)) {
+        if (needs_shift && ((current_modifiers & MOD_ANYSHIFT) == 0)) {
             report[0] |= MOD_LSHIFT;
         }
 
