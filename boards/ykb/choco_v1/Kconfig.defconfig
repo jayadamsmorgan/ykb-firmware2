@@ -22,20 +22,19 @@ if BOARD_CHOCO_V1
             default y
         
         config BT_PERIPHERAL_PREF_MIN_INT
-            default 12
+            default 6
         
         config BT_PERIPHERAL_PREF_MAX_INT
             default 24
         
         config BT_PERIPHERAL_PREF_LATENCY
-            default 4 
+            default 1
         
         config BT_PERIPHERAL_PREF_TIMEOUT
             default 600
 
         config  BT_GAP_AUTO_UPDATE_CONN_PARAMS
             default y
-
     endif # BT_INTER_KB_COMM_MASTER
     
     if BT_INTER_KB_COMM_SLAVE
@@ -90,16 +89,16 @@ if BOARD_CHOCO_V1
             default y
 
         config BT_BUF_ACL_RX_SIZE
-            default 256
+            default 1024
 
         config BT_BUF_ACL_TX_SIZE
-            default 256
+            default 1024
 
         config BT_BUF_ACL_TX_COUNT
-            default 10
+            default 20
 
         config BT_BUF_EVT_RX_COUNT
-            default 16
+            default 30
     
     endif # YKB_INTER_KB_COM
     if YKB_RIGHT

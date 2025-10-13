@@ -178,6 +178,7 @@ static void conn_connected(struct bt_conn *conn, uint8_t err) {
 
     if (!err) {
         atomic_inc(&periph_conn_count);
+        /* Сохраняем ссылку, если хотим держать глобально */
         // int er = bt_le_adv_stop();
         // if (er)
         //     LOG_INF("Failed to stop advertising: rc= %d", er);
@@ -199,25 +200,74 @@ static void conn_disconnected(struct bt_conn *conn, uint8_t reason) {
         return;
     }
     char addr[BT_ADDR_LE_STR_LEN];
-
+    // bt_conn_unref(conn);
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
     LOG_INF("Disconnected from %s, reason 0x%02x %s", addr, reason,
             bt_hci_err_to_str(reason));
-    atomic_dec(&periph_conn_count);
-    adv_periodic_resume(false);
+    if (conn == host_conn) {
+        bt_conn_unref(host_conn);
+        host_conn = NULL;
+    }
+    if (conn == slave_conn) {
+        bt_conn_unref(slave_conn);
+        slave_conn = NULL;
+    }
 }
 
+static int find_conn_info(struct bt_conn *conn, void *data) {
+    struct bt_conn_info info;
+    if (bt_conn_get_info(conn, &info) == 0) {
+        char addr[BT_ADDR_LE_STR_LEN];
+        bt_addr_le_to_str(info.le.remote, addr, sizeof(addr));
+        printk("conn %p state=%u role=%u id=%u remote=%s\n", conn, info.state,
+               info.role, info.id, addr);
+    } else {
+        printk("conn %p (no info)\n", conn);
+    }
+    return 0;
+}
+static void dump_conns(void) {
+    struct bt_conn *c;
+    LOG_INF("=== dump_conns ===\n");
+    bt_conn_foreach(BT_CONN_TYPE_LE, find_conn_info, NULL);
+    printk("=== end dump ===\n");
+}
 static void security_changed(struct bt_conn *conn, bt_security_t level,
                              enum bt_security_err err) {
     char addr[BT_ADDR_LE_STR_LEN];
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
+    static const struct bt_le_conn_param preferred = {
+        .interval_min = 10, // 15 ms
+        .interval_max = 40, // 30 ms
+        .latency = 4,
+        .timeout = 1000, // 4 s
+    };
+    int rc = bt_conn_le_param_update(conn, &preferred);
+    if (rc) {
+        LOG_ERR("Conn param update failed: %d", rc);
+    }
     if (err) {
         LOG_ERR("Security failed for %s: level %u err %s", addr, level,
                 bt_hci_err_to_str(err));
+        dump_conns();
+
+        if (conn == host_conn) {
+            bt_conn_unref(host_conn);
+            host_conn = NULL;
+        }
+        if (conn == slave_conn) {
+            bt_conn_unref(slave_conn);
+            slave_conn = NULL;
+        }
         return;
     }
 
+    if (!slave_conn) {
+        slave_conn = bt_conn_ref(conn);
+    } else if (!host_conn) {
+        host_conn = bt_conn_ref(conn);
+    }
     LOG_INF("Security level updated for %s: level %u", addr, level);
 
     if (atomic_get(&periph_conn_count) < CONFIG_BT_MAX_CONN)
@@ -225,11 +275,48 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     if (level >= BT_SECURITY_L2) {
     }
 }
+static void conn_recycled(void) {
+    LOG_INF("Conn recycled; can resume advertising");
+    atomic_dec(&periph_conn_count);
+    adv_periodic_resume(false);
+}
+static bool conn_param_req(struct bt_conn *conn,
+                           struct bt_le_conn_param *param) {
+    LOG_INF("connection request param update");
+}
+static void conn_param_updated(struct bt_conn *conn, uint16_t interval,
+                               uint16_t latency, uint16_t timeout) {
+    struct bt_conn_info info;
+
+    int rc = bt_conn_get_info(conn, &info);
+    if (rc) {
+        LOG_ERR("Failed to get conn info: %d", rc);
+        return;
+    }
+
+    char addr_str[BT_ADDR_LE_STR_LEN];
+    LOG_INF(
+        "Connection parameters updated for %s",
+        bt_addr_le_to_str(bt_conn_get_dst(conn), addr_str, sizeof(addr_str)));
+    LOG_INF("Role: %s",
+            info.role == BT_CONN_ROLE_CENTRAL ? "CENTRAL" : "PERIPH");
+    LOG_INF("Interval: %u (%ums)", interval, interval * 1.25);
+    LOG_INF("Latency: %u", latency);
+    LOG_INF("Supervision timeout: %u (%ums)", timeout, timeout * 10);
+    LOG_INF("Current interval: %u (%ums)", info.le.interval,
+            info.le.interval * 1.25);
+    LOG_INF("Current latency: %u", info.le.latency);
+    LOG_INF("Current timeout: %u (%ums)", info.le.timeout,
+            info.le.timeout * 10);
+}
 
 BT_CONN_CB_DEFINE(periph_adv_cb) = {
     .connected = conn_connected,
     .disconnected = conn_disconnected,
     .security_changed = security_changed,
+    .recycled = conn_recycled,
+    .le_param_req = conn_param_req,
+    .le_param_updated = conn_param_updated,
 };
 
 #define ADV_PERIOD_MS 5000
@@ -368,9 +455,9 @@ static struct bt_l2cap_server l2cap_ykb_server = {
 // Функция инициализации L2CAP сервера
 void ykb_master_l2cap_server_init(void) {
     int err = bt_l2cap_server_register(&l2cap_ykb_server);
-    if (err) {
-        LOG_ERR("Failed to register L2CAP server (err %d)", err);
-    } else {
-        LOG_INF("L2CAP server registered, PSM: %d", YKB_L2CAP_PSM);
-    }
+    // if (err) {
+    //     LOG_ERR("Failed to register L2CAP server (err %d)", err);
+    // } else {
+    //     LOG_INF("L2CAP server registered, PSM: %d", YKB_L2CAP_PSM);
+    // }
 }

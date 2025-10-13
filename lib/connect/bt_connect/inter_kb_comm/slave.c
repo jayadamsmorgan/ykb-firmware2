@@ -214,10 +214,10 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi,
     LOG_INF("Found master advertising split UUID; connecting...");
 
     const struct bt_le_conn_param conn_param = {
-        .interval_min = 12,
+        .interval_min = 6,
         .interval_max = 24,
-        .latency = 4,
-        .timeout = 600, /* 4 s */
+        .latency = 1,
+        .timeout = 400, /* 4 s */
     };
 
     bt_le_scan_stop();
@@ -296,15 +296,15 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     }
     if (level >= BT_SECURITY_L2) {
         LOG_INF("security OK, starting discovery");
-        int rc = bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
-        if (rc) {
-            LOG_ERR("Failed to set 2M PHY: (err %d)", rc);
-            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-        }
+        // int rc = bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
+        // if (rc) {
+        //     LOG_ERR("Failed to set 2M PHY: (err %d)", rc);
+        //     bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        // }
         conn_connected = true;
         ykb_l2cap_master_chan.chan.ops = &l2cap_master_ops;
-        rc = bt_l2cap_chan_connect(conn, &ykb_l2cap_master_chan.chan,
-                                   YKB_L2CAP_PSM);
+        int rc = bt_l2cap_chan_connect(conn, &ykb_l2cap_master_chan.chan,
+                                       YKB_L2CAP_PSM);
         if (rc) {
             LOG_ERR("Failed to connect L2CAP channel (err %d)", rc);
             bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
