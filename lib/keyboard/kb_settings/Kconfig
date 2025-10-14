@@ -1,13 +1,32 @@
 menu "Keyboard settings"
 
-    config KB_KEY_COUNT
-        int "Amount of keyboard keys"
-        help
-          Specify the amount of keys available
+    if YKB_SPLIT
 
-    config KB_MAX_LAYERS_SUPPORTED
-        int "Maximum amount of layers supported by the keyboard"
-        range 1 10
+        config KB_KEY_COUNT_LEFT
+            int "Amount of left keyboard keys"
+            help
+              Specify the amount of keys for the left keyboard
+
+        config KB_KEY_COUNT_RIGHT
+            int "Amount of right keyboard keys"
+            help
+              Specify the amount of keys for the right keyboard
+
+    endif # YKB_SPLIT
+
+    if !YKB_SPLIT
+
+        config KB_KEY_COUNT
+            int "Amount of keyboard keys"
+            help
+              Specify the amount of keys available
+
+    endif # !YKB_SPLIT
+
+    config KB_MAX_RULES_PER_KEY
+        int "Maximum amount of rules per key"
+        help
+          Specify maximum allowed amount of rules per each key in mappings
         default 5
 
     config KB_SETTINGS_DEFAULT_POLLING_RATE

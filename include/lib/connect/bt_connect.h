@@ -4,6 +4,7 @@
 #define LIB_BT_CONNECT_H_
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define BT_CONNECT_HID_REPORT_COUNT 8
@@ -12,6 +13,10 @@ int bt_connect_init();
 
 void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                      uint8_t report_size);
+
+int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size);
+
+void bt_connect_send_slave_keys(uint32_t *bm, size_t bm_byte_size);
 
 bool bt_connect_is_ready();
 
