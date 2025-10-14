@@ -35,6 +35,10 @@ void bt_connect_slave_pairing() {
     }
 }
 
+int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size) {
+    return -1;
+};
+
 static void start_advertising(void) {
     int err;
     err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,

@@ -1,6 +1,7 @@
 #include "slave.h"
 
 #include "inter_kb_comm.h"
+#include "inter_kb_proto.h"
 #include <lib/connect/bt_connect.h>
 
 #include <zephyr/bluetooth/bluetooth.h>
@@ -28,6 +29,18 @@ static atomic_t master_connection = ATOMIC_INIT(0);
 
 static struct bt_gatt_discover_params disc_params;
 static struct bt_gatt_subscribe_params sub_params;
+
+void bt_connect_send_slave_keys(uint32_t *bm, size_t bm_byte_size) {
+    struct inter_kb_proto data;
+    int data_len = inter_kb_proto_new(INTER_KB_PROTO_DATA_TYPE_KEYS, bm,
+                                      bm_byte_size, &data);
+    if (data_len <= 0) {
+        LOG_ERR("Failed to send slave keys, ikbpn err %d", data_len);
+        return;
+    }
+    // send((uint8_t *)data, data_len);
+    return;
+}
 
 void bt_connect_master_pairing() {
     if (!conn_connected) {

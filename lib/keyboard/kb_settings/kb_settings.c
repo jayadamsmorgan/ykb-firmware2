@@ -1,10 +1,3 @@
-// kb_settings.c
-//
-// Pointer-free, persistable keyboard settings with deep-copied mappings.
-// - Saves/loads POD-only image to Zephyr settings (NVS/FS)
-// - Rehydrates runtime views (kb_key_rules_t) that point to owned rule arrays
-// - Works with split (master/slave) layouts
-
 #include <lib/keyboard/kb_settings.h>
 
 #include <zephyr/logging/log.h>
@@ -17,16 +10,14 @@
 
 LOG_MODULE_REGISTER(kb_settings, CONFIG_KB_SETTINGS_LOG_LEVEL);
 
-// Bring in DEFAULT_KEYMAP (static, pointer-based tables authored per board)
 #include YKB_DEF_MAPPINGS_PATH
 
-// --------- Sanity checks on scalar defaults ---------
 BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
                  CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM,
              "Default value for key not pressed should be less than default "
              "value for key pressed fully.");
 
-/* -------- Settings subsystem keys --------
+/*
  * Namespace: "kb"
  * Item key : "blob"
  * Full path: "kb/blob"
@@ -35,40 +26,24 @@ BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
 #define KB_SETTINGS_ITEM "blob"
 #define KB_SETTINGS_KEY KB_SETTINGS_NS "/" KB_SETTINGS_ITEM
 
-// ---------- Persistable image (POD only; no pointers) ----------
-
-// Persistable rule
-typedef struct {
-    uint16_t mods_eq;
-    uint16_t mods_mask;
-    uint8_t out_code;
-    bool out_shifted;
-} kb_rule_pod_t;
-
-// Persistable ruleset per key
 typedef struct {
     uint8_t count;
-    kb_rule_pod_t rules[CONFIG_KB_MAX_RULES_PER_KEY];
+    kb_map_rule_t rules[CONFIG_KB_MAX_RULES_PER_KEY];
 } kb_ruleset_pod_t;
 
-// Bump if layout of this struct changes
 #define KB_SETTINGS_IMAGE_VERSION 2
 
 struct kb_settings_image {
     uint16_t version;
 
-    // Scalars
     uint16_t key_polling_rate;
     uint16_t key_thresholds[CONFIG_KB_KEY_COUNT];
     uint16_t minimums[CONFIG_KB_KEY_COUNT];
     uint16_t maximums[CONFIG_KB_KEY_COUNT];
     uint8_t mode;
 
-    // Mappings (master half owned here)
     kb_ruleset_pod_t mappings[CONFIG_KB_KEY_COUNT];
-
 #if CONFIG_BT_INTER_KB_COMM_MASTER
-    // Slave half if we are master
     kb_ruleset_pod_t mappings_slave[CONFIG_KB_KEY_COUNT_SLAVE];
 #endif
 };
@@ -92,26 +67,6 @@ static kb_settings_t settings;
 // Load flag
 static bool s_loaded_ok = false;
 
-// ---------- Helpers: POD <-> runtime rule ----------
-
-static inline kb_map_rule_t pod_to_rule(kb_rule_pod_t p) {
-    return (kb_map_rule_t){
-        .mods_eq = p.mods_eq,
-        .mods_mask = p.mods_mask,
-        .out_code = p.out_code,
-        .out_shifted = p.out_shifted,
-    };
-}
-
-static inline kb_rule_pod_t rule_to_pod(kb_map_rule_t r) {
-    return (kb_rule_pod_t){
-        .mods_eq = r.mods_eq,
-        .mods_mask = r.mods_mask,
-        .out_code = r.out_code,
-        .out_shifted = r.out_shifted,
-    };
-}
-
 // Point runtime views to owned arrays
 static void rehydrate_views_from_owned(void) {
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
@@ -126,8 +81,7 @@ static void rehydrate_views_from_owned(void) {
 #endif
 }
 
-// Deep-copy from compile-time DEFAULT_KEYMAP into owned arrays; then rehydrate
-static void load_defaults_into_owned_from_static(void) {
+static void load_default_keymap(void) {
 
 #if CONFIG_YKB_RIGHT
     size_t off = CONFIG_KB_KEY_COUNT_LEFT;
@@ -170,6 +124,7 @@ static void load_defaults_into_owned_from_static(void) {
             s_rules_slave[i][j] = src->rules[j];
         }
     }
+
 #endif
 
     rehydrate_views_from_owned();
@@ -192,7 +147,7 @@ static void build_image_from_runtime(struct kb_settings_image *img) {
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
         img->mappings[i].count = s_rules_master_cnt[i];
         for (uint8_t j = 0; j < s_rules_master_cnt[i]; ++j) {
-            img->mappings[i].rules[j] = rule_to_pod(s_rules_master[i][j]);
+            img->mappings[i].rules[j] = s_rules_master[i][j];
         }
     }
 
@@ -201,13 +156,11 @@ static void build_image_from_runtime(struct kb_settings_image *img) {
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT_SLAVE; ++i) {
         img->mappings_slave[i].count = s_rules_slave_cnt[i];
         for (uint8_t j = 0; j < s_rules_slave_cnt[i]; ++j) {
-            img->mappings_slave[i].rules[j] = rule_to_pod(s_rules_slave[i][j]);
+            img->mappings_slave[i].rules[j] = s_rules_slave[i][j];
         }
     }
 #endif
 }
-
-// ---------- Zephyr settings handlers ----------
 
 static int kb_settings_set(const char *key, size_t len,
                            settings_read_cb read_cb, void *cb_arg) {
@@ -215,8 +168,10 @@ static int kb_settings_set(const char *key, size_t len,
         return -ENOENT;
     }
 
-    if (len < sizeof(struct kb_settings_image)) {
-        LOG_WRN("kb settings too small (%zu)", len);
+    const size_t kb_settings_image_size = sizeof(struct kb_settings_image);
+    if (len != kb_settings_image_size) {
+        LOG_WRN("kb settings image size mismatch: got %zu, want %zu)", len,
+                kb_settings_image_size);
         return -EINVAL;
     }
 
@@ -234,7 +189,6 @@ static int kb_settings_set(const char *key, size_t len,
     if (img.version != KB_SETTINGS_IMAGE_VERSION) {
         LOG_WRN("kb settings version mismatch: got %u, want %u", img.version,
                 KB_SETTINGS_IMAGE_VERSION);
-        // If you add migration, do it here
         return -EINVAL;
     }
 
@@ -258,7 +212,7 @@ static int kb_settings_set(const char *key, size_t len,
         }
         s_rules_master_cnt[i] = n;
         for (uint8_t j = 0; j < n; ++j) {
-            s_rules_master[i][j] = pod_to_rule(img.mappings[i].rules[j]);
+            s_rules_master[i][j] = img.mappings[i].rules[j];
         }
     }
 
@@ -274,7 +228,7 @@ static int kb_settings_set(const char *key, size_t len,
         }
         s_rules_slave_cnt[i] = n;
         for (uint8_t j = 0; j < n; ++j) {
-            s_rules_slave[i][j] = pod_to_rule(img.mappings_slave[i].rules[j]);
+            s_rules_slave[i][j] = img.mappings_slave[i].rules[j];
         }
     }
 #endif
@@ -320,10 +274,7 @@ static void kb_settings_load_default(void) {
 
     settings.mode = KB_MODE_NORMAL;
 
-    // IMPORTANT:
-    // Do NOT memcpy DEFAULT_KEYMAP into settings.mappings (those contain
-    // pointers). Deep-copy into owned arrays and then rehydrate:
-    load_defaults_into_owned_from_static();
+    load_default_keymap();
 
     LOG_INF("Loaded keyboard defaults (threshold=%u)",
             (unsigned)((uint16_t)default_threshold));
@@ -373,6 +324,12 @@ int kb_settings_init(void) {
 
 kb_settings_t *kb_settings_get(void) {
     return &settings;
+}
+
+void kb_settings_factory_reset(void) {
+    settings_delete(KB_SETTINGS_NS);
+    settings_save_subtree(KB_SETTINGS_NS);
+    kb_settings_load_default();
 }
 
 void kb_settings_save(void) {

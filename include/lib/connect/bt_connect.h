@@ -14,15 +14,9 @@ int bt_connect_init();
 void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                      uint8_t report_size);
 
-static inline int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size) {
-    // stub for now
-    return -1;
-}
+int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size);
 
-static inline void bt_connect_send_slave_keys(uint32_t *bm,
-                                              size_t bm_byte_size) {
-    // stub for now
-}
+void bt_connect_send_slave_keys(uint32_t *bm, size_t bm_byte_size);
 
 bool bt_connect_is_ready();
 

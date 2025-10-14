@@ -111,7 +111,7 @@ static void bt_ready(int err) {
 
     LOG_INF("Bluetooth initialized");
 
-    err = settings_load();
+    err = settings_load_subtree("bt");
     if (err) {
         LOG_ERR("Unable to load settings (err %d)", err);
         return;
@@ -143,7 +143,7 @@ int bt_connect_init() {
 void bt_connect_factory_reset() {
     bt_unpair(BT_ID_DEFAULT, NULL);
     settings_delete("bt");
-    settings_save();
+    settings_save_subtree("bt");
 }
 
 void bt_connect_start_advertising() {
