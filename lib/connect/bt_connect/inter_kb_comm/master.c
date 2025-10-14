@@ -222,6 +222,11 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
 
     if (!err) {
         LOG_INF("Security changed: %s level %u", addr, level);
+        static const struct bt_le_conn_param pref = {.interval_min = 6,
+                                                     .interval_max = 12,
+                                                     .latency = 0,
+                                                     .timeout = 400};
+        bt_conn_le_param_update(conn, &pref);
     } else {
         LOG_ERR("Security failed: %s level %u err %s(%d)", addr, level,
                 bt_security_err_to_str(err), err);
