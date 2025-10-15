@@ -203,21 +203,8 @@ BT_GATT_SERVICE_DEFINE(
 
 void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                      uint8_t report_size) {
-#if CONFIG_BT_INTER_KB_COMM_SLAVE
-    if (ykb_slave_is_connected()) {
-        ykb_slave_send_keys(report);
-    } else {
-        bt_gatt_notify(NULL, &hog_svc.attrs[6], report,
-                       BT_CONNECT_HID_REPORT_COUNT);
-    }
-#elif CONFIG_BT_INTER_KB_COMM_MASTER
-    ykb_master_merge_reports(report, report_size);
     bt_gatt_notify(NULL, &hog_svc.attrs[6], report,
                    BT_CONNECT_HID_REPORT_COUNT);
-#else
-    bt_gatt_notify(NULL, &hog_svc.attrs[6], report,
-                   BT_CONNECT_HID_REPORT_COUNT);
-#endif // CONFIG_BT_INTER_KB_COMM_SLAVE
 }
 
 bool bt_connect_is_ready() {

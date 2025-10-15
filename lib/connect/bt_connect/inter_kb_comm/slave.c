@@ -1,6 +1,7 @@
 #include "slave.h"
 
 #include "inter_kb_comm.h"
+#include "inter_kb_proto.h"
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -49,23 +50,27 @@ BT_CONN_CB_DEFINE(peer_cb) = {
 };
 
 bool ykb_slave_is_connected() {
-    // if (ykb_master_conn)
-    //     LOG_INF("ykb_master_conn not NULL");
-    // if (ykb_ccc_enabled)
-    //     LOG_INF("ykb_ccc_enabled not NULL");
     return ykb_master_conn && ykb_ccc_enabled;
 }
 
 static const struct bt_gatt_attr *ykb_val = &ykb_split_svc.attrs[2]; // value
 
-void ykb_slave_send_keys(const uint8_t data[8]) {
+void bt_connect_send_slave_keys(uint32_t *bm, size_t bm_len) {
     if (!ykb_master_conn) {
         return;
     }
     if (!bt_gatt_is_subscribed(ykb_master_conn, ykb_val, BT_GATT_CCC_NOTIFY)) {
         return;
     }
-    int rc = bt_gatt_notify(ykb_master_conn, ykb_val, data, 8);
+    struct inter_kb_proto data;
+    int res =
+        inter_kb_proto_new(INTER_KB_PROTO_DATA_TYPE_KEYS, bm, bm_len, &data);
+    if (res <= 0) {
+        LOG_ERR("Unable to pack IKBP (err %d)", res);
+        return;
+    }
+
+    int rc = bt_gatt_notify(ykb_master_conn, ykb_val, &data, res);
     if (rc) {
         LOG_ERR("bt_gatt_notify rc=%d", rc);
     }

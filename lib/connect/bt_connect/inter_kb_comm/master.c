@@ -1,6 +1,9 @@
 #include "master.h"
 
 #include "inter_kb_comm.h"
+#include "inter_kb_proto.h"
+
+#include <lib/keyboard/kb_handle.h>
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -39,7 +42,8 @@ static bool adv_has_split_uuid(struct net_buf_simple *ad) {
 static struct bt_gatt_discover_params disc_params;
 static struct bt_gatt_subscribe_params sub_params;
 
-static uint8_t slave_report[BT_CONNECT_HID_REPORT_COUNT] = {0};
+// TODO: mutex or sem
+static uint32_t incoming_keys[KB_BITMAP_WORDS_SLAVE];
 
 static uint16_t ykb_start_handle, ykb_end_handle;
 static uint16_t ykb_value_handle, ykb_ccc_handle;
@@ -51,11 +55,27 @@ static uint8_t ykb_notify_cb(struct bt_conn *conn,
     if (!data)
         return BT_GATT_ITER_STOP;
 
-    if (len != 8) {
+    if (len > sizeof(struct inter_kb_proto)) {
+        LOG_ERR("Incoming BLE packet too big");
         return BT_GATT_ITER_CONTINUE;
     }
 
-    memcpy(slave_report, data, 8);
+    // May be a good idea to create k_work here instead ?
+
+    struct inter_kb_proto packet = {0};
+    int res = inter_kb_proto_parse((uint8_t *)data, len, &packet);
+    if (res <= 0) {
+        LOG_ERR("Unable to parse IKBP packet (err %d)", res);
+        return BT_GATT_ITER_CONTINUE;
+    }
+
+    if (packet.data_type == INTER_KB_PROTO_DATA_TYPE_KEYS) {
+        // TODO: mutex or sem
+        memcpy(incoming_keys, packet.data, MIN(res, sizeof(incoming_keys)));
+    } else {
+        LOG_WRN("Unsupported IKBP packet data type %d", packet.data_type);
+        return BT_GATT_ITER_CONTINUE;
+    }
 
     return BT_GATT_ITER_CONTINUE;
 }
@@ -265,19 +285,11 @@ void ykb_master_link_stop() {
     bt_le_scan_stop();
 }
 
-void ykb_master_merge_reports(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
-                              uint8_t report_count) {
-    report[0] |= slave_report[0];
-    if (report_count == 6) {
-        return;
+int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size) {
+    if (!ykb_slave_conn) {
+        return -1;
     }
-    uint8_t j = 2;
-    for (uint8_t i = report_count + 2; i < 8; ++i) {
-        if (report[i] == 0) {
-            if (slave_report[j] == 0)
-                break;
-            report[i] = slave_report[j];
-            j++;
-        }
-    }
+    // TODO: sem or mut
+    memcpy(bm, incoming_keys, bm_byte_size);
+    return 0;
 }

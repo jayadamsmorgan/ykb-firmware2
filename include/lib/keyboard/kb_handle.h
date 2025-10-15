@@ -1,6 +1,8 @@
 #ifndef LIB_KB_HANDLE_H_
 #define LIB_KB_HANDLE_H_
 
+#include <lib/keyboard/kb_mappings.h>
+
 #define KB_WORD_BITS 32u
 
 #define KB_BITMAP_WORDS_FROM_KEY_COUNT(COUNT)                                  \
