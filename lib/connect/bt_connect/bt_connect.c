@@ -127,7 +127,7 @@ static void bt_ready(int err) {
 
     LOG_INF("Bluetooth initialized");
 
-    err = settings_load();
+    err = settings_load_subtree("bt");
     if (err) {
         LOG_ERR("Unable to load settings (err %d)", err);
         return;
