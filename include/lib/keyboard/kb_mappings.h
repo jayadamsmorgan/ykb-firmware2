@@ -71,14 +71,12 @@ typedef struct {
     uint8_t count;
 } kb_key_rules_t;
 
-/* Backward-compatible RULE: mask defaults to 'eq' (exact match only). */
 #define RULE(eq, out, shifted)                                                 \
     (kb_map_rule_t) {                                                          \
         .mods_eq = (eq), .mods_mask = (eq), .out_code = (out),                 \
         .out_shifted = (shifted)                                               \
     }
 
-/* Explicit mask version (use this if you ever want eq != mask). */
 #define RULE_MASK(eq, mask, out, shifted)                                      \
     (kb_map_rule_t) {                                                          \
         .mods_eq = (eq), .mods_mask = (mask), .out_code = (out),               \
@@ -95,11 +93,11 @@ typedef struct {
     }
 
 #define RULES_FOR_KEY(name)                                                    \
-    static const kb_map_rule_t __kb_map_rules_key##name[] =
+    static const kb_map_rule_t __kb_map_rules_key##name[]
 
 #define RULES_MOD_KEY(name, key)                                               \
-    RULES_FOR_KEY(name) {                                                      \
-        RULE(MOD_NONE, key, false)                                             \
+    RULES_FOR_KEY(name) = {                                                    \
+        RULE(MOD_NONE, key, false),                                            \
     }
 
 #define DEFAULT_KEYMAP __default_kb_keymap
