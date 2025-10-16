@@ -30,6 +30,8 @@ typedef struct {
 
 extern backlight_state bl_state;
 
+static bool s_loaded_ok = false;
+
 static void kb_backlight_settings_load_default() {
     bl_state.brightness = 100;
     bl_state.mode_idx = 0;
@@ -80,7 +82,7 @@ static int kb_bl_settings_set(const char *key, size_t len,
     bl_state.mode_idx = img.mode_idx;
     bl_state.mode_speed = img.mode_speed;
     bl_state.on = img.on;
-
+    s_loaded_ok = true;
     return 0;
 }
 
@@ -98,10 +100,20 @@ static struct settings_handler kb_bl_settings_handler = {
     .h_export = kb_bl_settings_export,
 };
 
-static bool s_loaded_ok = false;
+void kb_bl_settings_save(void) {
+    backlight_state_img img;
+    build_image_from_runtime(&img);
+
+    int w = settings_save_one(KB_BL_SETTINGS_KEY, &img, sizeof(img));
+    if (w) {
+        LOG_WRN("Could not save default backlight state: %d", w);
+    }
+}
 
 void kb_backlight_settings_init(void) {
     int err;
+
+    s_loaded_ok = false;
 
     err = settings_subsys_init();
     if (err) {
@@ -115,7 +127,6 @@ void kb_backlight_settings_init(void) {
         // continue; we can still run with defaults
     }
 
-    s_loaded_ok = false;
     err = settings_load_subtree(KB_BL_SETTINGS_NS);
 
     if (!s_loaded_ok) {

@@ -7,6 +7,7 @@
 #include <lib/led/kb_bl_mode.h>
 
 #include <zephyr/logging/log.h>
+#include <zephyr/settings/settings.h>
 
 LOG_MODULE_REGISTER(kb_backlight_led_strip, CONFIG_KB_BACKLIGHT_LOG_LEVEL);
 
@@ -97,6 +98,7 @@ int kb_backlight_set_mode(size_t mode_idx) {
     if (bl_state.on && bl_state.mode->init) {
         bl_state.mode->init(CONFIG_KB_KEY_COUNT);
     }
+    kb_bl_settings_save();
     return 0;
 }
 
