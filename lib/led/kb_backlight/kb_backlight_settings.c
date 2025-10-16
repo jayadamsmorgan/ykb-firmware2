@@ -82,7 +82,9 @@ static int kb_bl_settings_set(const char *key, size_t len,
     bl_state.mode_idx = img.mode_idx;
     bl_state.mode_speed = img.mode_speed;
     bl_state.on = img.on;
+
     s_loaded_ok = true;
+
     return 0;
 }
 
@@ -118,13 +120,13 @@ void kb_backlight_settings_init(void) {
     err = settings_subsys_init();
     if (err) {
         LOG_ERR("settings_subsys_init failed: %d", err);
-        // continue; we will still try to load/save
+        goto load_defaults;
     }
 
     err = settings_register(&kb_bl_settings_handler);
     if (err) {
         LOG_ERR("settings_register failed: %d", err);
-        // continue; we can still run with defaults
+        goto load_defaults;
     }
 
     err = settings_load_subtree(KB_BL_SETTINGS_NS);
@@ -132,17 +134,22 @@ void kb_backlight_settings_init(void) {
     if (!s_loaded_ok) {
         LOG_WRN("No valid backlight settings found (err=%d) — loading defaults",
                 err);
+        goto load_defaults;
+    }
 
-        kb_backlight_settings_load_default();
+    return;
 
-        backlight_state_img img;
-        build_image_from_runtime(&img);
+load_defaults:
 
-        int w = settings_save_one(KB_BL_SETTINGS_KEY, &img, sizeof(img));
-        if (w) {
-            LOG_WRN("Could not save default backlight state: %d", w);
-        } else {
-            LOG_INF("Default backlight settings saved.");
-        }
+    kb_backlight_settings_load_default();
+
+    backlight_state_img img;
+    build_image_from_runtime(&img);
+
+    int w = settings_save_one(KB_BL_SETTINGS_KEY, &img, sizeof(img));
+    if (w) {
+        LOG_WRN("Could not save default backlight state: %d", w);
+    } else {
+        LOG_INF("Default backlight settings saved.");
     }
 }

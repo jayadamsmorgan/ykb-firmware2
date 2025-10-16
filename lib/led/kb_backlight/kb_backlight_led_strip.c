@@ -124,6 +124,7 @@ void kb_backlight_set_brightness(uint8_t brightness) {
     brightness = MIN(brightness, 100);
     brightness = MAX(brightness, 1);
     bl_state.brightness = brightness;
+    kb_bl_settings_save();
 }
 
 void kb_backlight_toggle() {
@@ -132,6 +133,7 @@ void kb_backlight_toggle() {
     } else {
         kb_backlight_turn_on();
     }
+    kb_bl_settings_save();
 }
 
 void kb_backlight_turn_on() {
@@ -139,12 +141,14 @@ void kb_backlight_turn_on() {
     if (bl_state.mode && bl_state.mode->init) {
         bl_state.mode->init(CONFIG_KB_KEY_COUNT);
     }
+    kb_bl_settings_save();
 }
 void kb_backlight_turn_off() {
     bl_state.on = false;
     if (bl_state.mode && bl_state.mode->deinit) {
         bl_state.mode->deinit();
     }
+    kb_bl_settings_save();
 }
 
 void kb_backlight_handle() {
