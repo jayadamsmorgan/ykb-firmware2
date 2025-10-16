@@ -1,4 +1,6 @@
-#include "kb_backlight.h"
+#include "kb_backlight_settings.h"
+
+#include "kb_backlight_state.h"
 
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
@@ -26,21 +28,21 @@ typedef struct {
 
 } backlight_state_img;
 
-extern backlight_state state;
+extern backlight_state bl_state;
 
-static void kb_backlight_settings_load_default(backlight_state *state) {
-    state->brightness = 100;
-    state->mode_idx = 0;
-    state->mode_speed = 0.5f;
-    state->on = true;
+static void kb_backlight_settings_load_default() {
+    bl_state.brightness = 100;
+    bl_state.mode_idx = 0;
+    bl_state.mode_speed = 1;
+    bl_state.on = true;
 }
 
 static void build_image_from_runtime(backlight_state_img *img) {
     img->version = KB_BL_SETTINGS_IMAGE_VERSION;
-    img->on = state.on;
-    img->brightness = state.brightness;
-    img->mode_speed = state.mode_speed;
-    img->mode_idx = state.mode_idx;
+    img->on = bl_state.on;
+    img->brightness = bl_state.brightness;
+    img->mode_speed = bl_state.mode_speed;
+    img->mode_idx = bl_state.mode_idx;
 }
 
 static int kb_bl_settings_set(const char *key, size_t len,
@@ -74,6 +76,11 @@ static int kb_bl_settings_set(const char *key, size_t len,
         return -EINVAL;
     }
 
+    bl_state.brightness = img.brightness;
+    bl_state.mode_idx = img.mode_idx;
+    bl_state.mode_speed = img.mode_speed;
+    bl_state.on = img.on;
+
     return 0;
 }
 
@@ -93,7 +100,7 @@ static struct settings_handler kb_bl_settings_handler = {
 
 static bool s_loaded_ok = false;
 
-int kb_backlight_settings_init(backlight_state *state) {
+void kb_backlight_settings_init(void) {
     int err;
 
     err = settings_subsys_init();
@@ -115,10 +122,10 @@ int kb_backlight_settings_init(backlight_state *state) {
         LOG_WRN("No valid backlight settings found (err=%d) — loading defaults",
                 err);
 
-        kb_backlight_settings_load_default(state);
+        kb_backlight_settings_load_default();
 
         backlight_state_img img;
-        build_image_from_runtime(state, &img);
+        build_image_from_runtime(&img);
 
         int w = settings_save_one(KB_BL_SETTINGS_KEY, &img, sizeof(img));
         if (w) {
@@ -127,6 +134,4 @@ int kb_backlight_settings_init(backlight_state *state) {
             LOG_INF("Default backlight settings saved.");
         }
     }
-
-    return 0;
 }

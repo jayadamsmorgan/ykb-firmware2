@@ -17,6 +17,23 @@ BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
              "Default value for key not pressed should be less than default "
              "value for key pressed fully.");
 
+#define KB_SETTINGS_IMAGE_VERSION 3
+
+struct kb_settings_image {
+
+    uint16_t version;
+    kb_settings_main_t main;
+    kb_settings_key_calib_t keys_calibration[CONFIG_KB_KEY_COUNT];
+    kb_ruleset_pod_t mappings[CONFIG_KB_KEY_COUNT];
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+
+    kb_settings_key_calib_t keys_calibration_slave[CONFIG_KB_KEY_COUNT_SLAVE];
+    kb_ruleset_pod_t mappings_slave[CONFIG_KB_KEY_COUNT_SLAVE];
+
+#endif
+};
+
 /*
  * Namespace: "kb"
  * Item key : "blob"
@@ -25,28 +42,6 @@ BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
 #define KB_SETTINGS_NS "kb"
 #define KB_SETTINGS_ITEM "blob"
 #define KB_SETTINGS_KEY KB_SETTINGS_NS "/" KB_SETTINGS_ITEM
-
-typedef struct {
-    uint8_t count;
-    kb_map_rule_t rules[CONFIG_KB_MAX_RULES_PER_KEY];
-} kb_ruleset_pod_t;
-
-#define KB_SETTINGS_IMAGE_VERSION 2
-
-struct kb_settings_image {
-    uint16_t version;
-
-    uint16_t key_polling_rate;
-    uint16_t key_thresholds[CONFIG_KB_KEY_COUNT];
-    uint16_t minimums[CONFIG_KB_KEY_COUNT];
-    uint16_t maximums[CONFIG_KB_KEY_COUNT];
-    uint8_t mode;
-
-    kb_ruleset_pod_t mappings[CONFIG_KB_KEY_COUNT];
-#if CONFIG_BT_INTER_KB_COMM_MASTER
-    kb_ruleset_pod_t mappings_slave[CONFIG_KB_KEY_COUNT_SLAVE];
-#endif
-};
 
 // ---------- Runtime "owned" storage (no persistence) ----------
 // Arrays that actually own rules; views will point here.
@@ -66,6 +61,12 @@ static kb_settings_t settings;
 
 // Load flag
 static bool s_loaded_ok = false;
+
+static on_settings_update_cb on_settings_update = NULL;
+
+void kb_settings_set_on_update(on_settings_update_cb cb) {
+    on_settings_update = cb;
+}
 
 // Point runtime views to owned arrays
 static void rehydrate_views_from_owned(void) {
@@ -135,13 +136,10 @@ static void build_image_from_runtime(struct kb_settings_image *img) {
     memset(img, 0, sizeof(*img));
     img->version = KB_SETTINGS_IMAGE_VERSION;
 
-    img->key_polling_rate = settings.key_polling_rate;
-    img->mode = settings.mode;
+    img->main = settings.main;
 
-    memcpy(img->key_thresholds, settings.key_thresholds,
-           sizeof(img->key_thresholds));
-    memcpy(img->minimums, settings.minimums, sizeof(img->minimums));
-    memcpy(img->maximums, settings.maximums, sizeof(img->maximums));
+    memcpy(img->keys_calibration, settings.keys_calibration,
+           sizeof(img->keys_calibration));
 
     // MASTER rules → POD
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
@@ -159,6 +157,8 @@ static void build_image_from_runtime(struct kb_settings_image *img) {
             img->mappings_slave[i].rules[j] = s_rules_slave[i][j];
         }
     }
+    memcpy(img->keys_calibration_slave, settings.keys_calibration_slave,
+           sizeof(img->keys_calibration_slave));
 #endif
 }
 
@@ -193,13 +193,10 @@ static int kb_settings_set(const char *key, size_t len,
     }
 
     // Scalars
-    settings.key_polling_rate = img.key_polling_rate;
-    settings.mode = img.mode;
+    settings.main = img.main;
 
-    memcpy(settings.key_thresholds, img.key_thresholds,
-           sizeof(settings.key_thresholds));
-    memcpy(settings.minimums, img.minimums, sizeof(settings.minimums));
-    memcpy(settings.maximums, img.maximums, sizeof(settings.maximums));
+    memcpy(settings.keys_calibration, img.keys_calibration,
+           sizeof(settings.keys_calibration));
 
     // MASTER rules: POD → owned
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
@@ -217,6 +214,9 @@ static int kb_settings_set(const char *key, size_t len,
     }
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER
+    memcpy(settings.keys_calibration_slave, img.keys_calibration_slave,
+           sizeof(settings.keys_calibration_slave));
+
     // SLAVE rules: POD → owned
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT_SLAVE; ++i) {
         uint8_t n = img.mappings_slave[i].count;
@@ -236,6 +236,11 @@ static int kb_settings_set(const char *key, size_t len,
     rehydrate_views_from_owned();
     s_loaded_ok = true;
     LOG_INF("Keyboard settings (incl. mappings) loaded from NVS");
+
+    if (on_settings_update) {
+        on_settings_update(&settings);
+    }
+
     return 0;
 }
 
@@ -258,7 +263,8 @@ static struct settings_handler kb_settings_handler = {
 static void kb_settings_load_default(void) {
     memset(&settings, 0, sizeof(settings));
 
-    settings.key_polling_rate = CONFIG_KB_SETTINGS_DEFAULT_POLLING_RATE;
+    settings.main.key_polling_rate = CONFIG_KB_SETTINGS_DEFAULT_POLLING_RATE;
+    settings.main.mode = KB_MODE_NORMAL;
 
     float range = (float)(CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM -
                           CONFIG_KB_SETTINGS_DEFAULT_MINIMUM);
@@ -266,13 +272,22 @@ static void kb_settings_load_default(void) {
         ((range / 100.0f) * CONFIG_KB_SETTINGS_DEFAULT_THRESHOLD) +
         (float)CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
 
+    kb_settings_key_calib_t key_calib = {
+        .minimum = CONFIG_KB_SETTINGS_DEFAULT_MINIMUM,
+        .maximum = CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM,
+        .threshold = (uint16_t)default_threshold,
+    };
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
-        settings.key_thresholds[i] = (uint16_t)default_threshold;
-        settings.minimums[i] = CONFIG_KB_SETTINGS_DEFAULT_MINIMUM;
-        settings.maximums[i] = CONFIG_KB_SETTINGS_DEFAULT_MAXIMUM;
+        settings.keys_calibration[i] = key_calib;
     }
 
-    settings.mode = KB_MODE_NORMAL;
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+
+    for (size_t i = 0; i < CONFIG_KB_KEY_COUNT_SLAVE; ++i) {
+        settings.keys_calibration_slave[i] = key_calib;
+    }
+
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
 
     load_default_keymap();
 
@@ -306,6 +321,9 @@ int kb_settings_init(void) {
 
         // Load scalar defaults + deep-copy mappings from DEFAULT_KEYMAP
         kb_settings_load_default();
+        if (on_settings_update) {
+            on_settings_update(&settings);
+        }
 
         // Persist defaults so subsequent boots load from NVS
         struct kb_settings_image img;

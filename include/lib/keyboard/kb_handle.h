@@ -28,4 +28,6 @@
 
 void kb_handle();
 
+int kb_handle_init();
+
 #endif // LIB_KB_HANDLE_H_

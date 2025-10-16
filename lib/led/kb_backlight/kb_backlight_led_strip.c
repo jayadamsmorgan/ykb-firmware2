@@ -1,6 +1,7 @@
 #include <lib/led/kb_backlight.h>
 
-#include "kb_backlight.h"
+#include "kb_backlight_settings.h"
+#include "kb_backlight_state.h"
 
 #include <lib/keyboard/kb_mappings.h>
 #include <lib/led/kb_bl_mode.h>
@@ -20,7 +21,7 @@ static int64_t last_update_time = 0;
 
 static struct led_rgb frame[CONFIG_KB_KEY_COUNT];
 
-static backlight_state state = {0};
+backlight_state bl_state = {0};
 
 static inline uint8_t brightness_scale(uint8_t v, uint8_t pct) {
     float scaled = (float)v * ((float)pct / 100.0f) * BRIGHTNESS_K;
@@ -50,21 +51,29 @@ int kb_backlight_init() {
         return -2;
     }
 
-    state.mode_idx = 0;
-    state.mode = kb_bl_mode_find("press_bruise_red");
-    if (state.mode) {
-        LOG_INF("Using backlight mode '%s'", state.mode->name);
-        if (state.mode->init) {
-            state.mode->init(CONFIG_KB_KEY_COUNT);
+    kb_backlight_settings_init();
+
+    int err = kb_backlight_set_mode(bl_state.mode_idx);
+    if (err) {
+        LOG_ERR("Unable to set mode with index '%d' (err %d)",
+                bl_state.mode_idx, err);
+        if (bl_state.mode_idx != 0) {
+            bl_state.mode_idx = 0;
+            err = kb_backlight_set_mode(bl_state.mode_idx);
+            if (err) {
+                goto unknown_err;
+            }
+        } else {
+            goto unknown_err;
         }
     }
 
-    state.on = true;
-    state.brightness = 100;
-    state.mode_speed = 1;
-
     LOG_INF("Successfully initialized backlight module");
     return 0;
+
+unknown_err:
+    LOG_ERR("Unknown error, could not load backlight modes");
+    return -3;
 }
 
 int kb_backlight_set_mode(size_t mode_idx) {
@@ -78,45 +87,45 @@ int kb_backlight_set_mode(size_t mode_idx) {
     if (!next)
         return -ENOENT;
 
-    if (state.mode && state.mode->deinit) {
-        LOG_DBG("Deinitializing current mode '%s'", state.mode->name);
-        state.mode->deinit();
+    if (bl_state.mode && bl_state.mode->deinit) {
+        LOG_DBG("Deinitializing current mode '%s'", bl_state.mode->name);
+        bl_state.mode->deinit();
     }
-    state.mode = next;
-    state.mode_idx = mode_idx;
-    LOG_INF("Selected backlight mode '%s'", state.mode->name);
-    if (state.on && state.mode->init) {
-        state.mode->init(CONFIG_KB_KEY_COUNT);
+    bl_state.mode = next;
+    bl_state.mode_idx = mode_idx;
+    LOG_INF("Selected backlight mode '%s'", bl_state.mode->name);
+    if (bl_state.on && bl_state.mode->init) {
+        bl_state.mode->init(CONFIG_KB_KEY_COUNT);
     }
     return 0;
 }
 
 void kb_backlight_next_mode(void) {
-    if (!state.mode)
+    if (!bl_state.mode)
         return;
     size_t n = kb_bl_mode_count();
     if (!n)
         return;
-    kb_backlight_set_mode((state.mode_idx + 1) % n);
+    kb_backlight_set_mode((bl_state.mode_idx + 1) % n);
 }
 
 void kb_backlight_prev_mode(void) {
-    if (!state.mode)
+    if (!bl_state.mode)
         return;
     size_t n = kb_bl_mode_count();
     if (!n)
         return;
-    kb_backlight_set_mode((state.mode_idx + n - 1) % n);
+    kb_backlight_set_mode((bl_state.mode_idx + n - 1) % n);
 }
 
 void kb_backlight_set_brightness(uint8_t brightness) {
     brightness = MIN(brightness, 100);
     brightness = MAX(brightness, 1);
-    state.brightness = brightness;
+    bl_state.brightness = brightness;
 }
 
 void kb_backlight_toggle() {
-    if (state.on) {
+    if (bl_state.on) {
         kb_backlight_turn_off();
     } else {
         kb_backlight_turn_on();
@@ -124,15 +133,15 @@ void kb_backlight_toggle() {
 }
 
 void kb_backlight_turn_on() {
-    state.on = true;
-    if (state.mode && state.mode->init) {
-        state.mode->init(CONFIG_KB_KEY_COUNT);
+    bl_state.on = true;
+    if (bl_state.mode && bl_state.mode->init) {
+        bl_state.mode->init(CONFIG_KB_KEY_COUNT);
     }
 }
 void kb_backlight_turn_off() {
-    state.on = false;
-    if (state.mode && state.mode->deinit) {
-        state.mode->deinit();
+    bl_state.on = false;
+    if (bl_state.mode && bl_state.mode->deinit) {
+        bl_state.mode->deinit();
     }
 }
 
@@ -144,16 +153,16 @@ void kb_backlight_handle() {
     }
     last_update_time = current;
 
-    if (!state.on) {
+    if (!bl_state.on) {
         return;
     }
 
-    if (!state.mode || !state.mode->apply) {
+    if (!bl_state.mode || !bl_state.mode->apply) {
         return;
     }
 
-    state.mode->apply(dt, state.mode_speed, frame);
-    apply_brightness(frame, CONFIG_KB_KEY_COUNT, state.brightness);
+    bl_state.mode->apply(dt, bl_state.mode_speed, frame);
+    apply_brightness(frame, CONFIG_KB_KEY_COUNT, bl_state.brightness);
 
     int res = led_strip_update_rgb(strip, frame, CONFIG_KB_KEY_COUNT);
     if (res) {
@@ -162,7 +171,7 @@ void kb_backlight_handle() {
 }
 
 void kb_backlight_on_event(kb_key_t *key) {
-    if (state.mode && state.mode->on_event) {
-        state.mode->on_event(key);
+    if (bl_state.mode && bl_state.mode->on_event) {
+        bl_state.mode->on_event(key);
     }
 }

@@ -78,6 +78,13 @@ int main(void) {
     LOG_DBG("BTConnect is ready!");
 #endif // CONFIG_LIB_BT_CONNECT
 
+    ret = kb_handle_init();
+    if (ret) {
+        LOG_ERR("KBHandle init error: %d", ret);
+        return 0;
+    }
+    LOG_DBG("KBHandle is ready!");
+
     ret = kb_settings_init();
     if (ret) {
         LOG_ERR("KBSettings init error: %d", ret);

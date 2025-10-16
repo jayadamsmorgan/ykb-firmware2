@@ -1,5 +1,5 @@
-#ifndef KB_BACKLIGHT_H
-#define KB_BACKLIGHT_H
+#ifndef KB_BACKLIGHT_STATE_H
+#define KB_BACKLIGHT_STATE_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -17,4 +17,4 @@ typedef struct {
 
 } backlight_state;
 
-#endif // KB_BACKLIGHT_H
+#endif // KB_BACKLIGHT_STATE_H

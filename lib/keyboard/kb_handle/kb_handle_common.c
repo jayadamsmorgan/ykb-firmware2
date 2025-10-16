@@ -27,9 +27,9 @@ static inline void for_each_set_bit(uint32_t word, uint16_t base,
 
 static inline uint8_t key_percentage(kb_settings_t *settings, uint16_t *values,
                                      uint8_t key_index) {
-    uint16_t max = settings->maximums[key_index];
-    uint16_t min = settings->minimums[key_index];
-    double percentage = (double)(values[key_index] - min) / (max - min) * 100;
+    kb_settings_key_calib_t calib = settings->keys_calibration[key_index];
+    double percentage = (double)(values[key_index] - calib.minimum) /
+                        (calib.maximum - calib.minimum) * 100;
     return (uint8_t)percentage;
 }
 
@@ -51,6 +51,14 @@ void edge_detection(kb_settings_t *settings, uint32_t *prev_down,
     memcpy(prev_down, curr_down, bm_size);
 }
 
+static uint16_t key_thresholds[CONFIG_KB_KEY_COUNT] = {0};
+
+static void on_settings_update(kb_settings_t *settings) {
+    for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
+        key_thresholds[i] = settings->keys_calibration[i].threshold;
+    }
+}
+
 static int64_t last_update_time = 0;
 
 bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
@@ -58,16 +66,15 @@ bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
 
     int64_t uptime = k_uptime_get();
     int64_t delta = uptime - last_update_time;
-    if (delta < settings->key_polling_rate) {
+    if (delta < settings->main.key_polling_rate) {
         return false;
     }
     last_update_time = uptime;
     memset(curr_down, 0, KB_BITMAP_BYTECNT);
 
-    switch (settings->mode) {
+    switch (settings->main.mode) {
     case KB_MODE_NORMAL: {
-        int res = kscan_poll_normal(kscan, curr_down, settings->key_thresholds,
-                                    values);
+        int res = kscan_poll_normal(kscan, curr_down, key_thresholds, values);
         if (res < 0) {
             LOG_ERR("Unable to poll normal (err %d)", res);
             return false;
@@ -75,8 +82,7 @@ bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
         break;
     }
     case KB_MODE_RACE: {
-        int res =
-            kscan_poll_race(kscan, curr_down, settings->key_thresholds, values);
+        int res = kscan_poll_race(kscan, curr_down, key_thresholds, values);
         if (res == -1)
             return false;
         if (res < -1) {
@@ -273,4 +279,11 @@ void handle_hid_report() {
         usb_connect_send(report);
     }
 #endif // CONFIG_KB_HANDLE_REPORT_PRIO_USB
+}
+
+int kb_handle_init() {
+
+    kb_settings_set_on_update(on_settings_update);
+
+    return 0;
 }
