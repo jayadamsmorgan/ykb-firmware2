@@ -170,7 +170,7 @@ static int kb_settings_set(const char *key, size_t len,
 
     const size_t kb_settings_image_size = sizeof(struct kb_settings_image);
     if (len != kb_settings_image_size) {
-        LOG_WRN("kb settings image size mismatch: got %zu, want %zu)", len,
+        LOG_ERR("kb settings image size mismatch: got %zu, want %zu)", len,
                 kb_settings_image_size);
         return -EINVAL;
     }
@@ -182,12 +182,12 @@ static int kb_settings_set(const char *key, size_t len,
         return (int)rlen;
     }
     if ((size_t)rlen != sizeof(img)) {
-        LOG_WRN("kb settings truncated: %zd", rlen);
+        LOG_ERR("kb settings truncated: %zd", rlen);
         return -EINVAL;
     }
 
     if (img.version != KB_SETTINGS_IMAGE_VERSION) {
-        LOG_WRN("kb settings version mismatch: got %u, want %u", img.version,
+        LOG_ERR("kb settings version mismatch: got %u, want %u", img.version,
                 KB_SETTINGS_IMAGE_VERSION);
         return -EINVAL;
     }
@@ -315,7 +315,7 @@ int kb_settings_init(void) {
         if (w) {
             LOG_WRN("Could not save default kb settings: %d", w);
         } else {
-            LOG_INF("Default kb settings saved to NVS");
+            LOG_INF("Default kb settings saved.");
         }
     }
 

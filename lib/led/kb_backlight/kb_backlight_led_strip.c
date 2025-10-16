@@ -1,5 +1,7 @@
 #include <lib/led/kb_backlight.h>
 
+#include "kb_backlight.h"
+
 #include <lib/keyboard/kb_mappings.h>
 #include <lib/led/kb_bl_mode.h>
 
@@ -13,18 +15,6 @@ LOG_MODULE_REGISTER(kb_backlight_led_strip, CONFIG_KB_BACKLIGHT_LOG_LEVEL);
 #define KB_BACKLIGHT_MIN_DELTA_MS (1000 / CONFIG_KB_BACKLIGHT_FPS)
 
 const struct device *strip = DEVICE_DT_GET(DT_CHOSEN(ykb_backlight));
-
-typedef struct {
-
-    struct kb_bl_mode *mode;
-    size_t mode_idx;
-    float mode_speed;
-
-    uint8_t brightness;
-
-    bool on;
-
-} backlight_state;
 
 static int64_t last_update_time = 0;
 
