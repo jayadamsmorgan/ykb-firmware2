@@ -98,16 +98,36 @@ bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
 static uint8_t fn_buff[CONFIG_KB_FN_KEYSTROKE_MAX_KEYS] = {0};
 static uint8_t fn_buff_size = 0;
 
-static void process_fn_buff() {
+static void fn_add(uint8_t code) {
+    for (int i = 0; i < fn_buff_size; ++i) {
+        if (fn_buff[i] == code)
+            return;
+    }
+    if (fn_buff_size < CONFIG_KB_FN_KEYSTROKE_MAX_KEYS) {
+        fn_buff[fn_buff_size++] = code;
+    }
+}
+
+static void fn_remove(uint8_t code) {
+    for (int i = 0; i < fn_buff_size; ++i) {
+        if (fn_buff[i] == code) {
+            for (int j = i + 1; j < fn_buff_size; ++j) {
+                fn_buff[j - 1] = fn_buff[j];
+            }
+            fn_buff[--fn_buff_size] = 0;
+            return;
+        }
+    }
+}
+
+static void process_fn_buff(void) {
     if (fn_buff_size == 0)
         return;
 
     STRUCT_SECTION_FOREACH(kb_fn_keystroke, keystroke) {
-
         if (keystroke->count != fn_buff_size)
             continue;
-
-        if (strncmp(keystroke->keys, fn_buff, fn_buff_size) == 0) {
+        if (memcmp(keystroke->keys, fn_buff, fn_buff_size) == 0) {
             LOG_DBG("Found matching keystroke %s", keystroke->name);
             if (keystroke->cb)
                 keystroke->cb();
@@ -123,9 +143,36 @@ static bool fn_pressed = false;
 static uint8_t report[8];
 static uint8_t report_size = 0;
 
-void clear_hid_report() {
-    memset(report, 0, 8);
-    report_size = 0;
+static void add_normal_key(uint8_t code) {
+    for (int i = 2; i < 8; ++i) {
+        if (report[i] == code)
+            return;
+    }
+    for (int i = 2; i < 8; ++i) {
+        if (report[i] == 0) {
+            report[i] = code;
+            if (report_size < 6)
+                report_size++;
+            return;
+        }
+    }
+}
+
+static void remove_normal_key(uint8_t code) {
+    int write = 2;
+    int new_count = 0;
+    for (int read = 2; read < 8; ++read) {
+        uint8_t v = report[read];
+        if (v == code)
+            continue;
+        if (v != 0) {
+            report[write++] = v;
+            new_count++;
+        }
+    }
+    for (; write < 8; ++write)
+        report[write] = 0;
+    report_size = new_count;
 }
 
 static uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
@@ -133,7 +180,6 @@ static uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
 
 void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
                       kb_settings_t *settings) {
-
     uint8_t code;
     if (!kb_mapping_translate_key(&mappings[key_index], layer_modifiers,
                                   &code)) {
@@ -141,17 +187,16 @@ void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
         return;
     }
 
-    LOG_DBG("Key with index %d and HID code 0x%X pressed", key_index, code);
+    LOG_DBG("Key %d HID 0x%X pressed", key_index, code);
 
-    if (code < KEY_LEFTCONTROL && fn_pressed &&
-        fn_buff_size < CONFIG_KB_FN_KEYSTROKE_MAX_KEYS) {
-        fn_buff[fn_buff_size++] = code;
-        process_fn_buff();
-        return;
-    } else if (code < KEY_LEFTCONTROL) {
-        if (report_size == 6)
+    if (code < KEY_LEFTCONTROL) {
+        if (fn_pressed) {
+            fn_add(code);
+            process_fn_buff();
             return;
-        report[2 + report_size++] = code;
+        } else {
+            add_normal_key(code);
+        }
     } else if (code < KEY_FN) {
         report[0] |= modifier_map[code - KEY_LEFTCONTROL];
     } else if (code == KEY_FN) {
@@ -165,7 +210,6 @@ void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
 
 void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
                         kb_settings_t *settings) {
-
     uint8_t code;
     if (!kb_mapping_translate_key(&mappings[key_index], layer_modifiers,
                                   &code)) {
@@ -173,38 +217,24 @@ void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
         return;
     }
 
-    LOG_DBG("Key with index %d and HID code 0x%X released", key_index, code);
+    LOG_DBG("Key %d HID 0x%X released", key_index, code);
 
-    if (code < KEY_LEFTCONTROL && fn_pressed && fn_buff_size > 0) {
-        uint8_t i = 0;
-        for (i = 0; i < fn_buff_size; ++i) {
-            if (fn_buff[i] == code) {
-                fn_buff[i] = 0;
-                break;
-            }
+    if (code < KEY_LEFTCONTROL) {
+        if (fn_pressed) {
+            fn_remove(code);
+        } else {
+            remove_normal_key(code);
         }
-        for (uint8_t j = i + 1; j < fn_buff_size; ++j) {
-            fn_buff[j - 1] = fn_buff[j];
-        }
-        fn_buff_size--;
-    } else if (code <= KEY_LEFTCONTROL) {
-        uint8_t i = 0;
-        for (i = 0; i < report_size; ++i) {
-            if (report[2 + i] == code) {
-                report[2 + i] = 0;
-                break;
-            }
-        }
-        for (uint8_t j = i + 1; j < report_size; ++j) {
-            report[2 + j - 1] = report[2 + j];
-        }
-        report_size--;
     } else if (code < KEY_FN) {
         report[0] &= ~(modifier_map[code - KEY_LEFTCONTROL]);
     } else if (code == KEY_FN) {
         fn_pressed = false;
+        fn_buff_size = 0;
+        memset(fn_buff, 0, sizeof(fn_buff));
+        return;
     } else if (code >= KEY_LAYER1) {
         layer_modifiers &= ~(layer_modifiers_map[code - KEY_LAYER1]);
+        return;
     }
 }
 
