@@ -296,7 +296,7 @@ int kb_settings_init(void) {
     }
 
     s_loaded_ok = false;
-    err = settings_load_subtree(KB_SETTINGS_NS);
+    // err = settings_load_subtree(KB_SETTINGS_NS);
 
     if (!s_loaded_ok) {
         LOG_WRN("No valid keyboard settings found (err=%d) — loading defaults",

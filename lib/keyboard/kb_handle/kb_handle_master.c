@@ -68,6 +68,8 @@ void on_release_slave(uint8_t key_index, kb_settings_t *settings) {
                        settings);
 }
 
+#include YKB_DEF_MAPPINGS_PATH
+
 void kb_handle() {
 
     kb_settings_t *settings = kb_settings_get();
@@ -99,11 +101,13 @@ void kb_handle() {
     clear_hid_report();
 
     // Fill out HID report with master keys
-    build_hid_report_from_bitmap(settings->mappings, settings, curr_down);
+    build_hid_report_from_bitmap((kb_key_rules_t *)DEFAULT_KEYMAP, settings,
+                                 curr_down);
 
     // Fill out HID report with slave keys
-    build_hid_report_from_bitmap(settings->mappings_slave, settings,
-                                 curr_down_slave);
+    build_hid_report_from_bitmap(
+        (kb_key_rules_t *)&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT], settings,
+        curr_down_slave);
 
     // Send HID report if possible BT/USB
     handle_hid_report();
