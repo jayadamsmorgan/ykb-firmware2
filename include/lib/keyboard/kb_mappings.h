@@ -40,8 +40,6 @@ enum {
     LAYERS_CNT = 4u,
 };
 
-#define LAYER_BTN UINT16_MAX
-
 typedef struct {
     uint16_t layer_eq;
     uint8_t out_code;
@@ -72,11 +70,6 @@ typedef struct {
         RULE(LAYER0, out),                                                     \
     }
 
-#define RULES_LAYER_KEY(name, out)                                             \
-    RULES_FOR_KEY(name) = {                                                    \
-        RULE(LAYER_BTN, out),                                                  \
-    }
-
 #define DEFAULT_KEYMAP __default_kb_keymap
 
 #define DEFAULT_KEYMAP_DEFINE(...)                                             \
@@ -87,24 +80,17 @@ typedef struct {
 //
 // Returns true if matching rule found, false otherwise
 static inline bool kb_mapping_translate_key(const kb_key_rules_t *kr,
-                                            uint16_t mods_ext, uint8_t *out,
-                                            bool *needs_shift) {
-
-    if (kr->count == 1 && kr->rules[0].layer_eq == LAYER_BTN) {
-        *out = kr->rules[0].out_code;
-        return true;
-    }
+                                            uint16_t mods_ext, uint8_t *out) {
 
     for (uint8_t i = 0; i < kr->count; ++i) {
         const kb_map_rule_t *r = &kr->rules[i];
-        if (mods_ext == r->layer_eq) {
+        if (mods_ext == r->layer_eq || i == kr->count - 1) {
             *out = r->out_code;
             return true;
         }
     }
 
     *out = KEY_NOKEY;
-    *needs_shift = false;
     return false;
 }
 

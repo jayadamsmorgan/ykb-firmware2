@@ -35,20 +35,23 @@ static uint32_t curr_down_slave[KB_BITMAP_WORDS_SLAVE] = {0};
 // Bitmap to store slave pressed keys on last kb_handle invocation
 static uint32_t prev_down_slave[KB_BITMAP_WORDS_SLAVE] = {0};
 
+#include YKB_DEF_MAPPINGS_PATH
+
 // Runs on every master key just pressed once
 void on_press_master(uint8_t key_index, kb_settings_t *settings) {
     // Handle backlight 'on_event' if present
     handle_bl_on_event(key_index, settings, true, values);
 
     // Handle fn keystrokes and layer switches
-    on_press_default(settings->mappings, key_index, settings);
+    on_press_default((kb_key_rules_t *)&DEFAULT_KEYMAP[0], key_index, settings);
 }
 
 // Runs on every master key just release once
 void on_release_master(uint8_t key_index, kb_settings_t *settings) {
     // Same logic as in on_press_master above
     handle_bl_on_event(key_index, settings, false, values);
-    on_release_default(settings->mappings, key_index, settings);
+    on_release_default((kb_key_rules_t *)&DEFAULT_KEYMAP[0], key_index,
+                       settings);
 }
 
 // Runs on every slave key just pressed once
@@ -57,18 +60,18 @@ void on_press_slave(uint8_t key_index, kb_settings_t *settings) {
     // Backlight 'on_event' is handled on the slave directly
 
     // Handle fn keystrokes and layer switches
-    on_press_default(&settings->mappings[CONFIG_KB_KEY_COUNT], key_index,
-                     settings);
+    on_press_default(
+        (kb_key_rules_t *)&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT], key_index,
+        settings);
 }
 
 // Runs on every slave key just released once
 void on_release_slave(uint8_t key_index, kb_settings_t *settings) {
     // Same logic as in on_press_slave above
-    on_release_default(&settings->mappings[CONFIG_KB_KEY_COUNT], key_index,
-                       settings);
+    on_release_default(
+        (kb_key_rules_t *)&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT], key_index,
+        settings);
 }
-
-#include YKB_DEF_MAPPINGS_PATH
 
 void kb_handle() {
 
@@ -96,18 +99,6 @@ void kb_handle() {
         memset(curr_down_slave, 0, KB_BITMAP_SLAVE_BYTECNT);
         memset(prev_down_slave, 0, KB_BITMAP_SLAVE_BYTECNT);
     }
-
-    // Clear HID report buffer from the previous iteration
-    clear_hid_report();
-
-    // Fill out HID report with master keys
-    build_hid_report_from_bitmap((kb_key_rules_t *)DEFAULT_KEYMAP, settings,
-                                 curr_down);
-
-    // Fill out HID report with slave keys
-    build_hid_report_from_bitmap(
-        (kb_key_rules_t *)&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT], settings,
-        curr_down_slave);
 
     // Send HID report if possible BT/USB
     handle_hid_report();

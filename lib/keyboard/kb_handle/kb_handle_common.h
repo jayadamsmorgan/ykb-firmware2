@@ -21,10 +21,6 @@ void handle_bl_on_event(uint8_t key_index, kb_settings_t *settings,
 // Clear out the HID report with zeros
 void clear_hid_report();
 
-// Fill out HID report with currently pressed keys based on 'mappings'
-void build_hid_report_from_bitmap(kb_key_rules_t *mappings,
-                                  kb_settings_t *settings, uint32_t *curr_down);
-
 // Send HID report where possible
 void handle_hid_report();
 
