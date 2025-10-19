@@ -17,23 +17,6 @@ BUILD_ASSERT(CONFIG_KB_SETTINGS_DEFAULT_MINIMUM <
              "Default value for key not pressed should be less than default "
              "value for key pressed fully.");
 
-#define KB_SETTINGS_IMAGE_VERSION 3
-
-struct kb_settings_image {
-
-    uint16_t version;
-    kb_settings_main_t main;
-    kb_settings_key_calib_t keys_calibration[CONFIG_KB_KEY_COUNT];
-    kb_ruleset_pod_t mappings[CONFIG_KB_KEY_COUNT];
-
-#if CONFIG_BT_INTER_KB_COMM_MASTER
-
-    kb_settings_key_calib_t keys_calibration_slave[CONFIG_KB_KEY_COUNT_SLAVE];
-    kb_ruleset_pod_t mappings_slave[CONFIG_KB_KEY_COUNT_SLAVE];
-
-#endif
-};
-
 /*
  * Namespace: "kb"
  * Item key : "blob"
@@ -132,7 +115,7 @@ static void load_default_keymap(void) {
 }
 
 // Build a persistable image from current runtime state
-static void build_image_from_runtime(struct kb_settings_image *img) {
+void kb_settings_build_image_from_runtime(struct kb_settings_image *img) {
     memset(img, 0, sizeof(*img));
     img->version = KB_SETTINGS_IMAGE_VERSION;
 
@@ -235,7 +218,7 @@ static int kb_settings_set(const char *key, size_t len,
 
     rehydrate_views_from_owned();
     s_loaded_ok = true;
-    LOG_INF("Keyboard settings (incl. mappings) loaded from NVS");
+    LOG_INF("Keyboard settings (incl. mappings) loaded");
 
     if (on_settings_update) {
         on_settings_update(&settings);
@@ -248,7 +231,7 @@ static int kb_settings_export(int (*export_func)(const char *name,
                                                  const void *val,
                                                  size_t val_len)) {
     struct kb_settings_image img;
-    build_image_from_runtime(&img);
+    kb_settings_build_image_from_runtime(&img);
     return export_func(KB_SETTINGS_ITEM, &img, sizeof(img));
 }
 
@@ -325,9 +308,9 @@ int kb_settings_init(void) {
             on_settings_update(&settings);
         }
 
-        // Persist defaults so subsequent boots load from NVS
+        // Persist defaults so subsequent boots load from Settings
         struct kb_settings_image img;
-        build_image_from_runtime(&img);
+        kb_settings_build_image_from_runtime(&img);
 
         int w = settings_save_one(KB_SETTINGS_KEY, &img, sizeof(img));
         if (w) {
@@ -352,7 +335,7 @@ void kb_settings_factory_reset(void) {
 
 void kb_settings_save(void) {
     struct kb_settings_image img;
-    build_image_from_runtime(&img);
+    kb_settings_build_image_from_runtime(&img);
 
     int err = settings_save_one(KB_SETTINGS_KEY, &img, sizeof(img));
     if (err) {

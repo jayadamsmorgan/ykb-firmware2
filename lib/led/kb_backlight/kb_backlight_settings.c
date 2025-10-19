@@ -1,6 +1,6 @@
-#include "kb_backlight_settings.h"
+#include <lib/led/kb_backlight_settings.h>
 
-#include "kb_backlight_state.h"
+#include <lib/led/kb_backlight_state.h>
 
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
@@ -16,18 +16,6 @@ LOG_MODULE_DECLARE(kb_backlight_led_strip, CONFIG_KB_BACKLIGHT_LOG_LEVEL);
 #define KB_BL_SETTINGS_ITEM "blob"
 #define KB_BL_SETTINGS_KEY KB_BL_SETTINGS_NS "/" KB_BL_SETTINGS_ITEM
 
-#define KB_BL_SETTINGS_IMAGE_VERSION 1
-
-typedef struct {
-    uint16_t version;
-
-    uint16_t mode_idx;
-    float mode_speed;
-    uint8_t brightness;
-    bool on;
-
-} backlight_state_img;
-
 extern backlight_state bl_state;
 
 static bool s_loaded_ok = false;
@@ -39,7 +27,7 @@ static void kb_backlight_settings_load_default() {
     bl_state.on = true;
 }
 
-static void build_image_from_runtime(backlight_state_img *img) {
+void kb_backlight_settings_build_image_from_runtime(backlight_state_img *img) {
     img->version = KB_BL_SETTINGS_IMAGE_VERSION;
     img->on = bl_state.on;
     img->brightness = bl_state.brightness;
@@ -92,7 +80,7 @@ static int kb_bl_settings_export(int (*export_func)(const char *name,
                                                     const void *val,
                                                     size_t val_len)) {
     backlight_state_img img;
-    build_image_from_runtime(&img);
+    kb_backlight_settings_build_image_from_runtime(&img);
     return export_func(KB_BL_SETTINGS_ITEM, &img, sizeof(img));
 }
 
@@ -104,7 +92,7 @@ static struct settings_handler kb_bl_settings_handler = {
 
 void kb_bl_settings_save(void) {
     backlight_state_img img;
-    build_image_from_runtime(&img);
+    kb_backlight_settings_build_image_from_runtime(&img);
 
     int w = settings_save_one(KB_BL_SETTINGS_KEY, &img, sizeof(img));
     if (w) {
@@ -144,7 +132,7 @@ load_defaults:
     kb_backlight_settings_load_default();
 
     backlight_state_img img;
-    build_image_from_runtime(&img);
+    kb_backlight_settings_build_image_from_runtime(&img);
 
     int w = settings_save_one(KB_BL_SETTINGS_KEY, &img, sizeof(img));
     if (w) {

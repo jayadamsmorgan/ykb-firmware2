@@ -45,11 +45,31 @@ typedef struct {
 
 } kb_settings_t;
 
+struct kb_settings_image {
+
+    uint16_t version;
+    kb_settings_main_t main;
+    kb_settings_key_calib_t keys_calibration[CONFIG_KB_KEY_COUNT];
+    kb_ruleset_pod_t mappings[CONFIG_KB_KEY_COUNT];
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+
+    kb_settings_key_calib_t keys_calibration_slave[CONFIG_KB_KEY_COUNT_SLAVE];
+    kb_ruleset_pod_t mappings_slave[CONFIG_KB_KEY_COUNT_SLAVE];
+
+#endif
+};
+
+// Increment every time kb_settings_image changes
+#define KB_SETTINGS_IMAGE_VERSION 3
+
 int kb_settings_init();
 
 kb_settings_t *kb_settings_get();
 
 void kb_settings_save();
+
+void kb_settings_build_image_from_runtime(struct kb_settings_image *img);
 
 typedef void (*on_settings_update_cb)(kb_settings_t *settings);
 

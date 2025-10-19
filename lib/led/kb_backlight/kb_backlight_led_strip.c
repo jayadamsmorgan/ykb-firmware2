@@ -1,9 +1,9 @@
 #include <lib/led/kb_backlight.h>
 
-#include "kb_backlight_settings.h"
-#include "kb_backlight_state.h"
+#include <lib/led/kb_backlight_settings.h>
 
 #include <lib/keyboard/kb_mappings.h>
+#include <lib/led/kb_backlight_state.h>
 #include <lib/led/kb_bl_mode.h>
 
 #include <zephyr/logging/log.h>

@@ -3,6 +3,9 @@
 #ifndef LIB_BT_CONNECT_H_
 #define LIB_BT_CONNECT_H_
 
+#include <lib/keyboard/kb_settings.h>
+#include <lib/led/kb_backlight_state.h>
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -17,6 +20,10 @@ void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
 int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size);
 
 void bt_connect_send_slave_keys(uint32_t *bm, size_t bm_byte_size);
+
+void bt_connect_send_master_kb_settings();
+
+void bt_connect_send_master_bl_state();
 
 bool bt_connect_is_ready();
 

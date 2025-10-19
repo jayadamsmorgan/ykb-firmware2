@@ -3,6 +3,8 @@
 #include "inter_kb_comm.h"
 #include "inter_kb_proto.h"
 
+#include <lib/led/kb_backlight_settings.h>
+
 #include <lib/keyboard/kb_handle.h>
 
 #include <zephyr/bluetooth/bluetooth.h>
@@ -292,4 +294,42 @@ int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size) {
     // TODO: sem or mut
     memcpy(bm, incoming_keys, bm_byte_size);
     return 0;
+}
+
+void bt_connect_send_master_kb_settings() {
+    struct kb_settings_image img;
+    kb_settings_build_image_from_runtime(&img);
+    struct inter_kb_proto data;
+    int res = inter_kb_proto_new(INTER_KB_PROTO_DATA_TYPE_KB_SETTINGS, &img,
+                                 sizeof(img), &data);
+    if (res <= 0) {
+        LOG_ERR("Unable to create IKBP packet: %d", res);
+        return;
+    }
+
+    struct bt_gatt_write_params params = {
+        .data = &data,
+        .handle = 2,
+        .length = res,
+    };
+    bt_gatt_write(ykb_slave_conn, &params);
+}
+
+void bt_connect_send_master_bl_state() {
+    backlight_state_img img;
+    kb_backlight_settings_build_image_from_runtime(&img);
+    struct inter_kb_proto data;
+    int res = inter_kb_proto_new(INTER_KB_PROTO_DATA_TYPE_BL_STATE, &img,
+                                 sizeof(img), &data);
+    if (res <= 0) {
+        LOG_ERR("Unable to create IKBP packet: %d", res);
+        return;
+    }
+
+    struct bt_gatt_write_params params = {
+        .data = &data,
+        .handle = 2,
+        .length = res,
+    };
+    bt_gatt_write(ykb_slave_conn, &params);
 }

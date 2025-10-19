@@ -233,9 +233,10 @@
 
 // Custom
 
-#define KEY_LEFTFN 0xE8
-#define KEY_LEFTLAYER 0xE9
-#define KEY_RIGHTFN 0xEA
-#define KEY_RIGHTLAYER 0xEB
+#define KEY_FN 0xE8
+
+#define KEY_LAYER1 0xE9
+#define KEY_LAYER2 0xEA
+#define KEY_LAYER3 0xEB
 
 #endif // KB_KEYS_H

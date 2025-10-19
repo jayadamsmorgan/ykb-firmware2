@@ -12,11 +12,14 @@
 #define CONFIG_INTER_KB_COMM_PROTO_MAX_LEN 10
 
 #define INTER_KB_PROTO_DATA_TYPE_KEYS 1
-#define INTER_KB_PROTO_DATA_TYPE_STATE 2
+#define INTER_KB_PROTO_DATA_TYPE_KB_SETTINGS 2
+#define INTER_KB_PROTO_DATA_TYPE_BL_STATE 3
 // TODO more
 
 #define IS_INTER_KB_PROTO_DATA_TYPE(X)                                         \
-    (X == INTER_KB_PROTO_DATA_TYPE_KEYS || X == INTER_KB_PROTO_DATA_TYPE_STATE)
+    (X == INTER_KB_PROTO_DATA_TYPE_KEYS ||                                     \
+     X == INTER_KB_PROTO_DATA_TYPE_KB_SETTINGS ||                              \
+     X == INTER_KB_PROTO_DATA_TYPE_BL_STATE)
 
 // To use both ways master->slave & slave->master
 struct inter_kb_proto {

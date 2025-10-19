@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-menu "Zephyr"
-    source "Kconfig.zephyr"
-endmenu
+source "Kconfig.zephyr"
 
 module = YKB_FIRMWARE
 module-str = ykb_firmware
