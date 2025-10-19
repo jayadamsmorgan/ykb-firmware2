@@ -155,6 +155,14 @@ void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
     }
 }
 
+static uint8_t report[8];
+static uint8_t report_size = 0;
+
+void clear_hid_report() {
+    memset(report, 0, 8);
+    report_size = 0;
+}
+
 void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
                         kb_settings_t *settings) {
 
@@ -205,13 +213,8 @@ void handle_bl_on_event(uint8_t key_index, kb_settings_t *settings,
 #endif // CONFIG_KB_BACKLIGHT
 }
 
-static uint8_t report[8];
-static uint8_t report_size = 0;
-
-void clear_hid_report() {
-    memset(report, 0, 8);
-    report_size = 0;
-}
+static uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
+                                  0x10, 0x20, 0x40, 0x80};
 
 void build_hid_report_from_bitmap(kb_key_rules_t *mappings,
                                   kb_settings_t *settings,
@@ -235,7 +238,7 @@ void build_hid_report_from_bitmap(kb_key_rules_t *mappings,
             continue;
 
         if (code >= KEY_LEFTCONTROL) {
-            report[0] |= code - KEY_LEFTCONTROL;
+            report[0] |= modifier_map[code - KEY_LEFTCONTROL];
         }
 
         if (report_size < 6)
