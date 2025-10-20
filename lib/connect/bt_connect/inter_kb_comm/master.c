@@ -257,7 +257,12 @@ static void ykb_master_disconnected(struct bt_conn *conn, uint8_t reason) {
         LOG_INF("Unpaired device %s", addr);
     }
 }
-
+static void conn_param_updated(struct bt_conn *conn, uint16_t interval,
+                               uint16_t latency, uint16_t timeout) {
+    printk("Connection parameters updated: interval=%u*1.25ms (~%u ms), "
+           "latency=%u, timeout=%u*10ms (~%u ms)\n",
+           interval, interval * 125 / 100, latency, timeout, timeout * 10);
+}
 static void security_changed(struct bt_conn *conn, bt_security_t level,
                              enum bt_security_err err) {
     char addr[BT_ADDR_LE_STR_LEN];
@@ -265,6 +270,18 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
     if (!err) {
+        struct bt_le_conn_param param = {
+            .interval_min = 6,
+            .interval_max = 12,
+            .latency = 0,
+            .timeout = 400,
+        };
+        int ret = bt_conn_le_param_update(conn, &param);
+        if (ret) {
+            printk("Failed to request connection parameter update: %d\n", ret);
+        } else {
+            printk("Connection parameter update requested\n");
+        }
         LOG_INF("Security changed: %s level %u", addr, level);
     } else {
         LOG_ERR("Security failed: %s level %u err %s(%d)", addr, level,
@@ -276,6 +293,7 @@ BT_CONN_CB_DEFINE(ykb_peer_cb) = {
     .connected = ykb_master_connected,
     .disconnected = ykb_master_disconnected,
     .security_changed = security_changed,
+    .le_param_updated = conn_param_updated,
 };
 
 void ykb_master_link_start() {

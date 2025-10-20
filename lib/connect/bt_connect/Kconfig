@@ -12,7 +12,7 @@ config LIB_BT_CONNECT
     select SETTINGS
     select BT_SETTINGS
     select BT_HCI_ERR_TO_STR
-    select BT_GAP_AUTO_UPDATE_CONN_PARAMS
+    select BT_USER_CONN_PARAM_UPDATE
     help
         This option enables the 'BTConnect' library.
 
