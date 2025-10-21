@@ -222,10 +222,6 @@ static void kb_settings_load_from_image(struct kb_settings_image *img) {
                                  runtime_mappings_slave,
                                  CONFIG_KB_KEY_COUNT_SLAVE);
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
-
-    if (on_settings_update) {
-        on_settings_update(&settings);
-    }
 }
 
 int kb_settings_handler_set(const char *key, size_t len,
