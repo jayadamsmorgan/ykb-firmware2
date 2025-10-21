@@ -43,15 +43,14 @@ void on_press_master(uint8_t key_index, kb_settings_t *settings) {
     handle_bl_on_event(key_index, settings, true, values);
 
     // Handle fn keystrokes and layer switches
-    on_press_default((kb_key_rules_t *)&DEFAULT_KEYMAP[0], key_index, settings);
+    on_press_default(settings->mappings, key_index, settings);
 }
 
 // Runs on every master key just release once
 void on_release_master(uint8_t key_index, kb_settings_t *settings) {
     // Same logic as in on_press_master above
     handle_bl_on_event(key_index, settings, false, values);
-    on_release_default((kb_key_rules_t *)&DEFAULT_KEYMAP[0], key_index,
-                       settings);
+    on_release_default(settings->mappings, key_index, settings);
 }
 
 // Runs on every slave key just pressed once
@@ -60,17 +59,13 @@ void on_press_slave(uint8_t key_index, kb_settings_t *settings) {
     // Backlight 'on_event' is handled on the slave directly
 
     // Handle fn keystrokes and layer switches
-    on_press_default(
-        (kb_key_rules_t *)&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT], key_index,
-        settings);
+    on_press_default(settings->mappings_slave, key_index, settings);
 }
 
 // Runs on every slave key just released once
 void on_release_slave(uint8_t key_index, kb_settings_t *settings) {
     // Same logic as in on_press_slave above
-    on_release_default(
-        (kb_key_rules_t *)&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT], key_index,
-        settings);
+    on_release_default(settings->mappings_slave, key_index, settings);
 }
 
 void kb_handle() {

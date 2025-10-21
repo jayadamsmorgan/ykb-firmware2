@@ -39,6 +39,10 @@ static bool s_loaded_ok = false;
 
 static on_settings_update_cb on_settings_update = NULL;
 
+void kb_settings_set_on_update(on_settings_update_cb cb) {
+    on_settings_update = cb;
+}
+
 static void
 kb_settings_load_default_keys_calibration(kb_settings_key_calib_t *calibrations,
                                           size_t key_count) {
@@ -55,22 +59,44 @@ kb_settings_load_default_keys_calibration(kb_settings_key_calib_t *calibrations,
     }
 }
 
-static void
-kb_settings_load_default_keymap(const kb_key_rules_t *default_keymap,
-                                size_t key_count,
-                                kb_ruleset_pod_t *runtime_keymap) {
+static void kb_key_rules_into_kb_ruleset_pods(const kb_key_rules_t *rules,
+                                              size_t key_count,
+                                              kb_ruleset_pod_t *pods) {
     for (size_t i = 0; i < key_count; ++i) {
-        kb_ruleset_pod_t *pod = &runtime_keymap[i];
-        pod->count = default_keymap[i].count;
+        kb_ruleset_pod_t *pod = &pods[i];
+        pod->count = rules[i].count;
+        size_t offset = 0;
         if (pod->count > CONFIG_KB_MAX_RULES_PER_KEY) {
             LOG_WRN(
                 "Rule count for key with index %d exceeds "
                 "CONFIG_KB_MAX_RULES_PER_KEY (%d), loading last %d rules...",
                 i, CONFIG_KB_MAX_RULES_PER_KEY, CONFIG_KB_MAX_RULES_PER_KEY);
+            offset = pod->count - CONFIG_KB_MAX_RULES_PER_KEY;
             pod->count = CONFIG_KB_MAX_RULES_PER_KEY;
         }
-        for (size_t j = 0; j < pod->count; ++j) {
-            pod->rules[j] = default_keymap[i].rules[j];
+        for (size_t index = 0; index < pod->count; ++offset, ++index) {
+            pod->rules[index] = rules[i].rules[offset];
+        }
+    }
+}
+
+static void kb_ruleset_pods_into_runtime_pods(kb_ruleset_pod_t *pods,
+                                              size_t key_count,
+                                              kb_ruleset_pod_t *runtime_pods) {
+    for (size_t i = 0; i < key_count; ++i) {
+        kb_ruleset_pod_t *pod = &runtime_pods[i];
+        pod->count = pods[i].count;
+        size_t offset = 0;
+        if (pod->count > CONFIG_KB_MAX_RULES_PER_KEY) {
+            LOG_WRN(
+                "Rule count for key with index %d exceeds "
+                "CONFIG_KB_MAX_RULES_PER_KEY (%d), loading last %d rules...",
+                i, CONFIG_KB_MAX_RULES_PER_KEY, CONFIG_KB_MAX_RULES_PER_KEY);
+            offset = pod->count - CONFIG_KB_MAX_RULES_PER_KEY;
+            pod->count = CONFIG_KB_MAX_RULES_PER_KEY;
+        }
+        for (size_t index = 0; index < pod->count; ++offset, ++index) {
+            pod->rules[index] = pods[i].rules[offset];
         }
     }
 }
@@ -109,11 +135,11 @@ static void kb_settings_load_default() {
 
     LOG_DBG("Loading default keymap...");
 #if CONFIG_YKB_RIGHT
-    kb_settings_load_default_keymap(&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
-                                    CONFIG_KB_KEY_COUNT, runtime_mappings);
+    kb_key_rules_into_kb_ruleset_pods(&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
+                                      CONFIG_KB_KEY_COUNT, runtime_mappings);
 #else
-    kb_settings_load_default_keymap(DEFAULT_KEYMAP, CONFIG_KB_KEY_COUNT,
-                                    runtime_mappings);
+    kb_key_rules_into_kb_ruleset_pods(DEFAULT_KEYMAP, CONFIG_KB_KEY_COUNT,
+                                      runtime_mappings);
 #endif // CONFIG_YKB_RIGHT
     kb_settings_keymap_rehydrate(settings.mappings, runtime_mappings,
                                  CONFIG_KB_KEY_COUNT);
@@ -122,35 +148,56 @@ static void kb_settings_load_default() {
 #if CONFIG_BT_INTER_KB_COMM_MASTER
     LOG_DBG("Loading default slave keymap...");
 #if CONFIG_YKB_RIGHT
-    kb_settings_load_default_keymap(DEFAULT_KEYMAP, CONFIG_KB_KEY_COUNT_SLAVE,
-                                    runtime_mappings_slave);
+    kb_key_rules_into_kb_ruleset_pods(DEFAULT_KEYMAP, CONFIG_KB_KEY_COUNT_SLAVE,
+                                      runtime_mappings_slave);
 #endif // CONFIG_YKB_RIGHT
 #if CONFIG_YKB_LEFT
-    kb_settings_load_default_keymap(&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
-                                    CONFIG_KB_KEY_COUNT_SLAVE,
-                                    runtime_mappings_slave);
+    kb_key_rules_into_kb_ruleset_pods(&DEFAULT_KEYMAP[CONFIG_KB_KEY_COUNT_LEFT],
+                                      CONFIG_KB_KEY_COUNT_SLAVE,
+                                      runtime_mappings_slave);
 #endif // CONFIG_YKB_LEFT
     kb_settings_keymap_rehydrate(settings.mappings_slave,
                                  runtime_mappings_slave,
                                  CONFIG_KB_KEY_COUNT_SLAVE);
     LOG_DBG("Loaded default slave keymap.");
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
+
+    if (on_settings_update) {
+        on_settings_update(&settings);
+    }
 }
 
-void kb_settings_set_on_update(on_settings_update_cb cb) {
-    on_settings_update = cb;
+void kb_settings_build_image_from_runtime(struct kb_settings_image *img) {
+    img->version = KB_SETTINGS_IMAGE_VERSION;
+    img->main = settings.main;
+
+    memcpy(img->keys_calibration, settings.keys_calibration,
+           sizeof(img->keys_calibration));
+    kb_key_rules_into_kb_ruleset_pods(settings.mappings, CONFIG_KB_KEY_COUNT,
+                                      img->mappings);
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+    memcpy(img->keys_calibration_slave, settings.keys_calibration_slave,
+           sizeof(img->keys_calibration_slave));
+    kb_key_rules_into_kb_ruleset_pods(settings.mappings_slave,
+                                      CONFIG_KB_KEY_COUNT_SLAVE,
+                                      img->mappings_slave);
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
 }
 
-void kb_settings_get(kb_settings_t *kb_settings) {
-    k_sem_take(&settings_sem, K_FOREVER);
-    memcpy(kb_settings, &settings, sizeof(kb_settings_t));
-    k_sem_give(&settings_sem);
+kb_settings_t *kb_settings_get() {
+    return &settings;
 }
 
 void kb_settings_save() {
-    k_sem_take(&settings_sem, K_FOREVER);
-
-    k_sem_give(&settings_sem);
+    struct kb_settings_image img;
+    kb_settings_build_image_from_runtime(&img);
+    int w = settings_save_one(KB_SETTINGS_KEY, &img, sizeof(img));
+    if (w) {
+        LOG_WRN("Could not save keyboard settings: %d", w);
+    } else {
+        LOG_INF("Keyboard settings saved.");
+    }
 }
 
 static void kb_settings_load_from_image(struct kb_settings_image *img) {
@@ -160,15 +207,24 @@ static void kb_settings_load_from_image(struct kb_settings_image *img) {
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
         settings.keys_calibration[i] = img->keys_calibration[i];
     }
+    kb_ruleset_pods_into_runtime_pods(img->mappings, CONFIG_KB_KEY_COUNT,
+                                      runtime_mappings);
+    kb_settings_keymap_rehydrate(settings.mappings, runtime_mappings,
+                                 CONFIG_KB_KEY_COUNT);
 
 #if CONFIG_BT_INTER_KB_COMM_MASTER
     for (size_t i = 0; i < CONFIG_KB_KEY_COUNT_SLAVE; ++i) {
         settings.keys_calibration_slave[i] = img->keys_calibration_slave[i];
     }
+    kb_ruleset_pods_into_runtime_pods(
+        img->mappings_slave, CONFIG_KB_KEY_COUNT_SLAVE, runtime_mappings_slave);
+    kb_settings_keymap_rehydrate(settings.mappings_slave,
+                                 runtime_mappings_slave,
+                                 CONFIG_KB_KEY_COUNT_SLAVE);
 #endif // CONFIG_BT_INTER_KB_COMM_MASTER
 
-    for (size_t i = 0; i < CONFIG_KB_KEY_COUNT; ++i) {
-        settings.mappings[i].count = img->mappings[i].count;
+    if (on_settings_update) {
+        on_settings_update(&settings);
     }
 }
 
@@ -204,10 +260,31 @@ int kb_settings_handler_set(const char *key, size_t len,
         return -EINVAL;
     }
 
+    kb_settings_load_from_image(&img);
+
+    kb_settings_keymap_rehydrate(settings.mappings, runtime_mappings,
+                                 CONFIG_KB_KEY_COUNT);
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+    kb_settings_keymap_rehydrate(settings.mappings_slave,
+                                 runtime_mappings_slave,
+                                 CONFIG_KB_KEY_COUNT_SLAVE);
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
+
+    if (on_settings_update) {
+        on_settings_update(&settings);
+    }
+    s_loaded_ok = true;
     return 0;
 }
 
-int kb_settings_handler_export() {}
+int kb_settings_handler_export(int (*export_func)(const char *name,
+                                                  const void *val,
+                                                  size_t val_len)) {
+    struct kb_settings_image img;
+    kb_settings_build_image_from_runtime(&img);
+    return export_func(KB_SETTINGS_ITEM, &img, sizeof(img));
+}
 
 struct settings_handler settings_handler = {
     .name = KB_SETTINGS_NS,
@@ -216,15 +293,36 @@ struct settings_handler settings_handler = {
 };
 
 int kb_settings_init() {
-
     int err;
+
+    s_loaded_ok = false;
 
     err = settings_subsys_init();
     if (err) {
         LOG_ERR("settings_subsys_init err %d", err);
+        goto load_defaults;
+    }
+
+    err = settings_register(&settings_handler);
+    if (err) {
+        LOG_ERR("settings_register failed: %d", err);
+        goto load_defaults;
     }
 
     err = settings_load_subtree(KB_SETTINGS_NS);
+
+    if (!s_loaded_ok) {
+        LOG_WRN("No valid keyboard settings found (err=%d) — loading defaults",
+                err);
+        goto load_defaults;
+    }
+
+    return 0;
+
+load_defaults:
+
+    kb_settings_load_default();
+    kb_settings_save();
 
     return 0;
 }
