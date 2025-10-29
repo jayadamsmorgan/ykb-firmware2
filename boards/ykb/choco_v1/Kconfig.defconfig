@@ -57,6 +57,8 @@ if BOARD_CHOCO_V1
         #     default 64
         # config BT_DISCARDABLE_BUF_COUNT
         #     default 12
+        config BT_CONN_TX_NOTIFY_WQ
+            default y
         config BT_BUF_EVT_DISCARDABLE_COUNT
             default 5
         
@@ -64,7 +66,7 @@ if BOARD_CHOCO_V1
             default 6
         
         config BT_PERIPHERAL_PREF_MAX_INT
-            default 12
+            default 8
         
         config BT_PERIPHERAL_PREF_LATENCY
             default 0 

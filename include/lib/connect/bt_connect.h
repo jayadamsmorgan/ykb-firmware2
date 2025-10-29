@@ -12,6 +12,7 @@
 
 #define BT_CONNECT_HID_REPORT_COUNT 8
 
+
 int bt_connect_init();
 
 void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],

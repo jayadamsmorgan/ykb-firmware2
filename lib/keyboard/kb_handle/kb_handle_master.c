@@ -77,15 +77,6 @@ void kb_handle() {
 
     kb_settings_t *settings = kb_settings_get();
 
-    // Fill out master curr_down and values
-    if (!get_kscan_bitmap(settings, kscan, values, curr_down)) {
-        return;
-    }
-
-    // Go through master bitmap and trigger on_press or on_release callbacks
-    edge_detection(settings, prev_down, curr_down, KB_BITMAP_BYTECNT,
-                   on_press_master, on_release_master);
-
     // Try to get slave keys if possible
     int res =
         bt_connect_get_slave_keys(curr_down_slave, KB_BITMAP_SLAVE_BYTECNT);
@@ -99,6 +90,15 @@ void kb_handle() {
         memset(curr_down_slave, 0, KB_BITMAP_SLAVE_BYTECNT);
         memset(prev_down_slave, 0, KB_BITMAP_SLAVE_BYTECNT);
     }
+
+    // Fill out master curr_down and values
+    if (!get_kscan_bitmap(settings, kscan, values, curr_down)) {
+        return;
+    }
+
+    // Go through master bitmap and trigger on_press or on_release callbacks
+    edge_detection(settings, prev_down, curr_down, KB_BITMAP_BYTECNT,
+                   on_press_master, on_release_master);
 
     // Send HID report if possible BT/USB
     handle_hid_report();

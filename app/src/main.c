@@ -20,14 +20,14 @@
 LOG_MODULE_REGISTER(main, CONFIG_YKB_FIRMWARE_LOG_LEVEL);
 
 #define KB_THREAD_STACK_SIZE 4096
-#define KB_THREAD_PRIO K_PRIO_PREEMPT(15)
+#define KB_THREAD_PRIO K_PRIO_PREEMPT(30)
 
 static K_THREAD_STACK_DEFINE(kb_thread_stack, KB_THREAD_STACK_SIZE);
 static struct k_thread kb_thread_data;
 
 #if CONFIG_KB_BACKLIGHT
 #define KB_BL_THREAD_STACK_SIZE 8192
-#define KB_BL_THREAD_PRIO K_PRIO_PREEMPT(15)
+#define KB_BL_THREAD_PRIO K_PRIO_PREEMPT(30)
 
 static K_THREAD_STACK_DEFINE(kb_bl_thread_stack, KB_BL_THREAD_STACK_SIZE);
 static struct k_thread kb_bl_thread_data;
@@ -35,7 +35,7 @@ static struct k_thread kb_bl_thread_data;
 static void kb_bl_thread(void *a, void *b, void *c) {
     while (true) {
         kb_backlight_handle();
-        k_yield();
+        k_sleep(K_MSEC(20));
     }
 }
 #endif // CONFIG_KB_BACKLIGHT
@@ -43,7 +43,7 @@ static void kb_bl_thread(void *a, void *b, void *c) {
 static void kb_thread(void *a, void *b, void *c) {
     while (true) {
         kb_handle();
-        k_yield();
+        k_sleep(K_MSEC(20));
     }
 }
 

@@ -69,7 +69,6 @@ static const struct bt_data sd[] = {
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
             sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
-
 static const uint8_t report_map[] = HID_KEYBOARD_REPORT_DESC();
 static bool bt_kb_ready;
 static uint8_t ctrl_point;
@@ -183,6 +182,7 @@ void bt_connect_start_advertising() {
     }
 }
 
+#if CONFIG_BT_INTER_KB_COMM_MASTER
 BT_GATT_SERVICE_DEFINE(
     hog_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_HIDS),
     BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
@@ -207,6 +207,7 @@ void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                    BT_CONNECT_HID_REPORT_COUNT);
 }
 
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
 bool bt_connect_is_ready() {
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
     return ykb_slave_is_connected();

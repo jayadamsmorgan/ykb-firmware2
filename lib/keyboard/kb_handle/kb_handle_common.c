@@ -63,12 +63,12 @@ static int64_t last_update_time = 0;
 bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
                       uint16_t *values, uint32_t *curr_down) {
 
-    int64_t uptime = k_uptime_get();
-    int64_t delta = uptime - last_update_time;
-    if (delta < settings->main.key_polling_rate) {
-        return false;
-    }
-    last_update_time = uptime;
+    // int64_t uptime = k_uptime_get();
+    // int64_t delta = uptime - last_update_time;
+    // if (delta < settings->main.key_polling_rate) {
+    //     return false;
+    // }
+    // last_update_time = uptime;
     memset(curr_down, 0, KB_BITMAP_BYTECNT);
 
     switch (settings->main.mode) {
