@@ -1,4 +1,4 @@
-WB = west build app --pristine
+WB = west build app --pristine --sysbuild
 MENU = -t menuconfig
 
 EXTRA_CONF = -DEXTRA_CONF_FILE=

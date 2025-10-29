@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
+config YKB_FIRMWARE
+    bool "Enable YKB firmware"
+    help
+      Enable YKB Firmware application, drivers and libraries
+
 source "Kconfig.zephyr"
 
 module = YKB_FIRMWARE

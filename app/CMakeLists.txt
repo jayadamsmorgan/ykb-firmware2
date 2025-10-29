@@ -5,4 +5,8 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(app LANGUAGES C)
 
-target_sources(app PRIVATE src/main.c)
+test_sysbuild()
+
+if(CONFIG_YKB_FIRMWARE)
+    target_sources(app PRIVATE src/main.c)
+endif()

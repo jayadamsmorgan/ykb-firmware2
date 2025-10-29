@@ -49,6 +49,8 @@ static void kb_thread(void *a, void *b, void *c) {
 
 int main(void) {
 
+    printk("HELLO PIDORASIK!!!\n");
+
     const struct device *kscan;
 
     kscan = DEVICE_DT_GET(DT_NODELABEL(kscan));

@@ -17,3 +17,4 @@ manifest:
           - cmsis_6
           - hal_stm32
           - mbedtls
+          - mcuboot

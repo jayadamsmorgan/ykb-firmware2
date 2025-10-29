@@ -53,10 +53,7 @@ if BOARD_CHOCO_V1
     endif # YKB_USB_ENABLED
 
     if YKB_BT_ENABLED
-        # config BT_DISCARDABLE_BUF_LEN
-        #     default 64
-        # config BT_DISCARDABLE_BUF_COUNT
-        #     default 12
+
         config BT_BUF_EVT_DISCARDABLE_COUNT
             default 5
         
@@ -101,7 +98,14 @@ if BOARD_CHOCO_V1
 
         config BT_BUF_EVT_RX_COUNT
             default 10
-        endif # YKB_BT_ENABLED
+
+        config BT_CONN_TX_NOTIFY_WQ
+            default y
+
+        config BT_CONN_TX_NOTIFY_WQ_PRIO
+            default 5
+
+    endif # YKB_BT_ENABLED
 
     if YKB_RIGHT
 

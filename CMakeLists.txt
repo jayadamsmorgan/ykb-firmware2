@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
-zephyr_syscall_include_directories(include)
+if(CONFIG_YKB_FIRMWARE)
 
-zephyr_include_directories(include)
+    zephyr_syscall_include_directories(include)
 
-add_subdirectory(drivers)
-add_subdirectory(lib)
+    zephyr_include_directories(include)
+
+    add_subdirectory(drivers)
+    add_subdirectory(lib)
+
+endif()

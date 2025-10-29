@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
-rsource "drivers/Kconfig"
-rsource "lib/Kconfig"
+if YKB_FIRMWARE
 
-rsource "Kconfig.ykb"
+    rsource "drivers/Kconfig"
+    rsource "lib/Kconfig"
+
+    rsource "Kconfig.ykb"
+
+endif # YKB_FIRMWARE
