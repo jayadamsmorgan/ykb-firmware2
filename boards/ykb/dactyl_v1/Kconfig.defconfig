@@ -29,7 +29,7 @@ if BOARD_DACTYL_V1
             default 6
         
         config BT_PERIPHERAL_PREF_MAX_INT
-            default 12
+            default 6
         
         config BT_PERIPHERAL_PREF_LATENCY
             default 0 

@@ -31,6 +31,8 @@
 
 LOG_MODULE_REGISTER(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
+#if !CONFIG_BT_INTER_KB_COMM_SLAVE
+
 struct hids_info {
     uint16_t version;
     uint8_t code;
@@ -54,14 +56,15 @@ static struct hids_report input = {
     .type = 0x01, // HIDS_INPUT
 };
 
+#endif // !CONFIG_BT_INTER_KB_COMM_SLAVE
+
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
     BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xC1, 0x03),
     BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
                   BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)),
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
-    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le,
-            sizeof(ykb_svc_uuid_le)), // <- сюда
+    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le, sizeof(ykb_svc_uuid_le)),
 #endif
 };
 
@@ -69,6 +72,8 @@ static const struct bt_data sd[] = {
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
             sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
+
+#if !CONFIG_BT_INTER_KB_COMM_SLAVE
 
 static const uint8_t report_map[] = HID_KEYBOARD_REPORT_DESC();
 static bool bt_kb_ready;
@@ -118,6 +123,8 @@ static ssize_t write_ctrl_point(struct bt_conn *conn,
 
     return len;
 }
+
+#endif // !CONFIG_BT_INTER_KB_COMM_SLAVE
 
 static void bt_ready(int err) {
     if (err) {
@@ -183,6 +190,7 @@ void bt_connect_start_advertising() {
     }
 }
 
+#if !CONFIG_BT_INTER_KB_COMM_SLAVE
 BT_GATT_SERVICE_DEFINE(
     hog_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_HIDS),
     BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
@@ -200,12 +208,15 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT,
                            BT_GATT_CHRC_WRITE_WITHOUT_RESP, BT_GATT_PERM_WRITE,
                            NULL, write_ctrl_point, &ctrl_point));
+#endif // !CONFIG_BT_INTER_KB_COMM_SLAVE
 
+#if !CONFIG_BT_INTER_KB_COMM_SLAVE
 void bt_connect_send(uint8_t report[BT_CONNECT_HID_REPORT_COUNT],
                      uint8_t report_size) {
     bt_gatt_notify(NULL, &hog_svc.attrs[6], report,
                    BT_CONNECT_HID_REPORT_COUNT);
 }
+#endif // !CONFIG_BT_INTER_KB_COMM_SLAVE
 
 bool bt_connect_is_ready() {
 #if CONFIG_BT_INTER_KB_COMM_SLAVE
@@ -214,6 +225,8 @@ bool bt_connect_is_ready() {
     return bt_kb_ready;
 #endif // CONFIG_BT_INTER_KB_COMM_SLAVE
 }
+
+#if !CONFIG_BT_INTER_KB_COMM_SLAVE
 
 void bt_connect_set_battery_charging() {
     bt_bas_bls_set_battery_charge_state(BT_BAS_BLS_CHARGE_STATE_CHARGING);
@@ -240,3 +253,5 @@ void bt_connect_set_battery_level(uint8_t level) {
         LOG_ERR("Unable to set battery level (err %d)", res);
     }
 }
+
+#endif // !CONFIG_BT_INTER_KB_COMM_SLAVE

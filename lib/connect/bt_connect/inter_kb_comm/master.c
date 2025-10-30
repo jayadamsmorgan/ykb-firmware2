@@ -157,7 +157,7 @@ static void ykb_device_found(const bt_addr_le_t *addr, int8_t rssi,
 
     struct bt_le_conn_param conn_param = {
         .interval_min = 6,
-        .interval_max = 12,
+        .interval_max = 6,
         .latency = 0,
         .timeout = 400,
     };
@@ -272,7 +272,7 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
     if (!err) {
         struct bt_le_conn_param param = {
             .interval_min = 6,
-            .interval_max = 12,
+            .interval_max = 6,
             .latency = 0,
             .timeout = 400,
         };

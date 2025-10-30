@@ -26,8 +26,12 @@ static uint32_t curr_down[KB_BITMAP_WORDS] = {0};
 // Bitmap to store pressed keys on last kb_handle invocation
 static uint32_t prev_down[KB_BITMAP_WORDS] = {0};
 
+bool change = false;
+
 // Runs on every key just pressed once
 static void on_press_slave(uint8_t key_index, kb_settings_t *settings) {
+
+    change = true;
 
     // Handle backlight 'on_event' if present
     handle_bl_on_event(key_index, settings, true, values);
@@ -42,6 +46,9 @@ static void on_press_slave(uint8_t key_index, kb_settings_t *settings) {
 
 // Runs on every key just released once
 static void on_release_slave(uint8_t key_index, kb_settings_t *settings) {
+
+    change = true;
+
     // Same logic as in on_press_slave above
     handle_bl_on_event(key_index, settings, false, values);
     if (!bt_connect_is_ready()) {
@@ -64,7 +71,10 @@ void kb_handle() {
                    on_press_slave, on_release_slave);
 
     // Send keys to the master
-    bt_connect_send_slave_keys(curr_down, KB_BITMAP_BYTECNT);
+    if (change) {
+        bt_connect_send_slave_keys(curr_down, KB_BITMAP_BYTECNT);
+        change = false;
+    }
 
     // It doesn't really make sense to
     // do anything else with them here
