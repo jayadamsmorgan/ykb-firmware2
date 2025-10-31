@@ -67,7 +67,10 @@ int kb_settings_init();
 
 kb_settings_t *kb_settings_get();
 
+void kb_settings_save_from_image(struct kb_settings_image *img);
 void kb_settings_save();
+
+void kb_settings_load_from_image(struct kb_settings_image *img);
 
 void kb_settings_build_image_from_runtime(struct kb_settings_image *img);
 

@@ -189,10 +189,9 @@ kb_settings_t *kb_settings_get() {
     return &settings;
 }
 
-void kb_settings_save() {
-    struct kb_settings_image img;
-    kb_settings_build_image_from_runtime(&img);
-    int w = settings_save_one(KB_SETTINGS_KEY, &img, sizeof(img));
+void kb_settings_save_from_image(struct kb_settings_image *img) {
+    int w = settings_save_one(KB_SETTINGS_KEY, img,
+                              sizeof(struct kb_settings_image));
     if (w) {
         LOG_WRN("Could not save keyboard settings: %d", w);
     } else {
@@ -200,7 +199,13 @@ void kb_settings_save() {
     }
 }
 
-static void kb_settings_load_from_image(struct kb_settings_image *img) {
+void kb_settings_save() {
+    struct kb_settings_image img;
+    kb_settings_build_image_from_runtime(&img);
+    kb_settings_save_from_image(&img);
+}
+
+void kb_settings_load_from_image(struct kb_settings_image *img) {
     settings.main.mode = img->main.mode;
     settings.main.key_polling_rate = img->main.key_polling_rate;
 

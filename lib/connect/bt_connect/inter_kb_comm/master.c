@@ -48,7 +48,8 @@ static struct bt_gatt_subscribe_params sub_params;
 static uint32_t incoming_keys[KB_BITMAP_WORDS_SLAVE];
 
 static uint16_t ykb_start_handle, ykb_end_handle;
-static uint16_t ykb_value_handle, ykb_ccc_handle;
+static uint16_t keys_value_handle, keys_ccc_handle;
+static uint16_t state_value_handle;
 
 static uint8_t ykb_notify_cb(struct bt_conn *conn,
                              struct bt_gatt_subscribe_params *params,
@@ -86,7 +87,7 @@ static uint8_t ykb_discover_func(struct bt_conn *conn,
                                  const struct bt_gatt_attr *attr,
                                  struct bt_gatt_discover_params *params) {
     if (!attr) {
-        LOG_WRN("Discovery finished with no match (type=%u)", params->type);
+        LOG_WRN("Discovery finished (type=%u)", params->type);
         return BT_GATT_ITER_STOP;
     }
 
@@ -96,38 +97,65 @@ static uint8_t ykb_discover_func(struct bt_conn *conn,
         ykb_start_handle = attr->handle + 1;
         ykb_end_handle = prim->end_handle;
 
-        disc_params.uuid = &YKB_KEYS_CHRC_UUID.uuid;
+        // 1) Find STATE (write) characteristic first
+        disc_params.uuid = &YKB_STATE_CHRC_UUID.uuid;
         disc_params.start_handle = ykb_start_handle;
         disc_params.end_handle = ykb_end_handle;
         disc_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
         bt_gatt_discover(conn, &disc_params);
         return BT_GATT_ITER_STOP;
     }
+
     case BT_GATT_DISCOVER_CHARACTERISTIC: {
         const struct bt_gatt_chrc *chrc = attr->user_data;
-        ykb_value_handle = chrc->value_handle;
 
-        disc_params.uuid = BT_UUID_GATT_CCC;
-        disc_params.start_handle = ykb_value_handle + 1;
-        disc_params.end_handle = ykb_end_handle;
-        disc_params.type = BT_GATT_DISCOVER_DESCRIPTOR;
-        bt_gatt_discover(conn, &disc_params);
-        return BT_GATT_ITER_STOP;
+        // Which one did we just find?
+        if (bt_uuid_cmp(chrc->uuid, &YKB_STATE_CHRC_UUID.uuid) == 0) {
+            state_value_handle = chrc->value_handle;
+
+            // 2) Now find KEYS (notify) characteristic
+            disc_params.uuid = &YKB_KEYS_CHRC_UUID.uuid;
+            disc_params.start_handle = ykb_start_handle;
+            disc_params.end_handle = ykb_end_handle;
+            disc_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
+            bt_gatt_discover(conn, &disc_params);
+            return BT_GATT_ITER_STOP;
+        }
+
+        if (bt_uuid_cmp(chrc->uuid, &YKB_KEYS_CHRC_UUID.uuid) == 0) {
+            keys_value_handle = chrc->value_handle;
+
+            // 3) Find CCC for KEYS (notify)
+            disc_params.uuid = BT_UUID_GATT_CCC;
+            disc_params.start_handle = keys_value_handle + 1;
+            disc_params.end_handle = ykb_end_handle;
+            disc_params.type = BT_GATT_DISCOVER_DESCRIPTOR;
+            bt_gatt_discover(conn, &disc_params);
+            return BT_GATT_ITER_STOP;
+        }
+
+        // Some other characteristic—keep iterating.
+        return BT_GATT_ITER_CONTINUE;
     }
+
     case BT_GATT_DISCOVER_DESCRIPTOR: {
-        ykb_ccc_handle = attr->handle;
+        keys_ccc_handle = attr->handle;
 
         memset(&sub_params, 0, sizeof(sub_params));
-        sub_params.ccc_handle = ykb_ccc_handle;
-        sub_params.value_handle = ykb_value_handle;
+        sub_params.ccc_handle = keys_ccc_handle;
+        sub_params.value_handle = keys_value_handle;
         sub_params.value = BT_GATT_CCC_NOTIFY;
         sub_params.notify = ykb_notify_cb;
 
         int rc = bt_gatt_subscribe(conn, &sub_params);
         LOG_INF("bt_gatt_subscribe rc=%d (val=%u, ccc=%u)", rc,
-                ykb_value_handle, ykb_ccc_handle);
+                keys_value_handle, keys_ccc_handle);
+
+        bt_connect_send_master_bl_state();
+        // bt_connect_send_master_kb_settings();
         return BT_GATT_ITER_STOP;
     }
+
     default:
         return BT_GATT_ITER_STOP;
     }
@@ -315,6 +343,11 @@ int bt_connect_get_slave_keys(uint32_t *bm, size_t bm_byte_size) {
 }
 
 void bt_connect_send_master_kb_settings() {
+    if (!ykb_slave_conn || !state_value_handle) {
+        LOG_ERR("No slave connection established.");
+        return;
+    }
+
     struct kb_settings_image img;
     kb_settings_build_image_from_runtime(&img);
     struct inter_kb_proto data;
@@ -325,15 +358,20 @@ void bt_connect_send_master_kb_settings() {
         return;
     }
 
-    struct bt_gatt_write_params params = {
-        .data = &data,
-        .handle = 2,
-        .length = res,
-    };
-    bt_gatt_write(ykb_slave_conn, &params);
+    int err = bt_gatt_write_without_response(ykb_slave_conn, state_value_handle,
+                                             &data, res, false);
+    if (err) {
+        LOG_ERR("ERR %d", err);
+    }
 }
 
 void bt_connect_send_master_bl_state() {
+
+    if (!ykb_slave_conn || !state_value_handle) {
+        LOG_ERR("No slave connection established.");
+        return;
+    }
+
     backlight_state_img img;
     kb_backlight_settings_build_image_from_runtime(&img);
     struct inter_kb_proto data;
@@ -344,10 +382,9 @@ void bt_connect_send_master_bl_state() {
         return;
     }
 
-    struct bt_gatt_write_params params = {
-        .data = &data,
-        .handle = 2,
-        .length = res,
-    };
-    bt_gatt_write(ykb_slave_conn, &params);
+    int err = bt_gatt_write_without_response(ykb_slave_conn, state_value_handle,
+                                             &data, res, false);
+    if (err) {
+        LOG_ERR("ERR %d", err);
+    }
 }

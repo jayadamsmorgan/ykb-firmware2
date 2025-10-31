@@ -1,5 +1,6 @@
 #include <lib/led/kb_backlight_settings.h>
 
+#include <lib/led/kb_backlight.h>
 #include <lib/led/kb_backlight_state.h>
 
 #include <zephyr/logging/log.h>
@@ -25,6 +26,13 @@ static void kb_backlight_settings_load_default() {
     bl_state.mode_idx = 0;
     bl_state.mode_speed = 1;
     bl_state.on = true;
+}
+
+void kb_bl_settings_load_from_image(backlight_state_img *img) {
+    bl_state.brightness = img->brightness;
+    bl_state.mode_idx = img->mode_idx;
+    bl_state.mode_speed = img->mode_speed;
+    bl_state.on = img->on;
 }
 
 void kb_backlight_settings_build_image_from_runtime(backlight_state_img *img) {

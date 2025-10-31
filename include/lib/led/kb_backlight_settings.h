@@ -20,6 +20,8 @@ typedef struct {
 void kb_backlight_settings_init(void);
 void kb_bl_settings_save(void);
 
+void kb_bl_settings_load_from_image(backlight_state_img *img);
+
 void kb_backlight_settings_build_image_from_runtime(backlight_state_img *img);
 
 #endif // KB_BACKLIGHT_SETTINGS_H
