@@ -14,6 +14,19 @@
 
 LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
+static const struct bt_data ad[] = {
+    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xC1, 0x03),
+    BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
+                  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)),
+    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le, sizeof(ykb_svc_uuid_le)),
+};
+
+static const struct bt_data sd[] = {
+    BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
+            sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
+
 static uint8_t ykb_ccc_enabled;
 static struct bt_conn *ykb_master_conn;
 
@@ -43,10 +56,15 @@ static void ykb_peer_disconnected(struct bt_conn *conn, uint8_t reason) {
         ykb_master_conn = NULL;
     }
 }
-
+static void ykb_peer_recycled(void) {
+    LOG_INF("Start new advertisong procedure");
+    bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+                    ARRAY_SIZE(sd));
+}
 BT_CONN_CB_DEFINE(peer_cb) = {
     .connected = ykb_peer_connected,
     .disconnected = ykb_peer_disconnected,
+    .recycled = ykb_peer_recycled,
 };
 
 bool ykb_slave_is_connected() {

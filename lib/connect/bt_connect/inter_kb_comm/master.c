@@ -18,6 +18,21 @@
 
 LOG_MODULE_DECLARE(bt_connect, CONFIG_BT_CONNECT_LOG_LEVEL);
 
+static const struct bt_data ad[] = {
+    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xC1, 0x03),
+    BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
+                  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)),
+#if CONFIG_BT_INTER_KB_COMM_SLAVE
+    BT_DATA(BT_DATA_UUID128_ALL, ykb_svc_uuid_le,
+            sizeof(ykb_svc_uuid_le)), // <- сюда
+#endif
+};
+
+static const struct bt_data sd[] = {
+    BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
+            sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
 static struct bt_conn *ykb_slave_conn;
 
 static bool uuid_match_cb(struct bt_data *data, void *user_data) {
@@ -231,6 +246,7 @@ static void ykb_master_connected(struct bt_conn *conn, uint8_t err) {
 
     ykb_start_discovery(conn);
 }
+static bool slave_was_disconnected = false;
 
 static void ykb_master_disconnected(struct bt_conn *conn, uint8_t reason) {
     char addr[BT_ADDR_LE_STR_LEN];
@@ -242,19 +258,23 @@ static void ykb_master_disconnected(struct bt_conn *conn, uint8_t reason) {
 
     if (conn == ykb_slave_conn) {
         bt_conn_unref(ykb_slave_conn);
+
+        LOG_INF("Peer disconnected");
         ykb_slave_conn = NULL;
-        LOG_WRN("Peer disconnected, rescanning...");
-        bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
+        slave_was_disconnected = true;
         return;
     }
-
-    if (reason == BT_HCI_ERR_REMOTE_USER_TERM_CONN) {
-        int res = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
-        if (res) {
-            LOG_ERR("Unable to unpair device %s (err %d)", addr, res);
-            return;
-        }
-        LOG_INF("Unpaired device %s", addr);
+}
+static void ykb_master_recycled(void) {
+    // Check if slave connection was recylced:
+    if (slave_was_disconnected) {
+        LOG_WRN("Peer disconnected, rescanning...");
+        bt_le_scan_start(BT_LE_SCAN_ACTIVE, ykb_device_found);
+        slave_was_disconnected = false;
+    } else {
+        LOG_WRN("Host disconnected, start advertising...");
+        int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd,
+                                  ARRAY_SIZE(sd));
     }
 }
 static void conn_param_updated(struct bt_conn *conn, uint16_t interval,
@@ -294,6 +314,7 @@ BT_CONN_CB_DEFINE(ykb_peer_cb) = {
     .disconnected = ykb_master_disconnected,
     .security_changed = security_changed,
     .le_param_updated = conn_param_updated,
+    .recycled = ykb_master_recycled,
 };
 
 void ykb_master_link_start() {
