@@ -98,19 +98,15 @@ bool get_kscan_bitmap(kb_settings_t *settings, const struct device *const kscan,
 static uint8_t fn_buff[CONFIG_KB_FN_KEYSTROKE_MAX_KEYS] = {0};
 static uint8_t fn_buff_size = 0;
 
-static void fn_add(uint8_t code) {
-    for (int i = 0; i < fn_buff_size; ++i) {
-        if (fn_buff[i] == code)
-            return;
-    }
+static void fn_add(uint8_t key_index) {
     if (fn_buff_size < CONFIG_KB_FN_KEYSTROKE_MAX_KEYS) {
-        fn_buff[fn_buff_size++] = code;
+        fn_buff[fn_buff_size++] = key_index;
     }
 }
 
-static void fn_remove(uint8_t code) {
+static void fn_remove(uint8_t key_index) {
     for (int i = 0; i < fn_buff_size; ++i) {
-        if (fn_buff[i] == code) {
+        if (fn_buff[i] == key_index) {
             for (int j = i + 1; j < fn_buff_size; ++j) {
                 fn_buff[j - 1] = fn_buff[j];
             }
@@ -140,65 +136,65 @@ static uint16_t layer_modifiers = 0;
 
 static bool fn_pressed = false;
 
-static uint8_t report[8];
-static uint8_t report_size = 0;
-
-static void add_normal_key(uint8_t code) {
-    for (int i = 2; i < 8; ++i) {
-        if (report[i] == code)
-            return;
-    }
-    for (int i = 2; i < 8; ++i) {
-        if (report[i] == 0) {
-            report[i] = code;
-            if (report_size < 6)
-                report_size++;
-            return;
-        }
-    }
-}
-
-static void remove_normal_key(uint8_t code) {
-    int write = 2;
-    int new_count = 0;
-    for (int read = 2; read < 8; ++read) {
-        uint8_t v = report[read];
-        if (v == code)
-            continue;
-        if (v != 0) {
-            report[write++] = v;
-            new_count++;
-        }
-    }
-    for (; write < 8; ++write)
-        report[write] = 0;
-    report_size = new_count;
-}
-
-static uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
-                                  0x10, 0x20, 0x40, 0x80};
-
-void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
-                      kb_settings_t *settings) {
+typedef struct {
+    uint8_t index;
     uint8_t code;
-    if (!kb_mapping_translate_key(&mappings[key_index], layer_modifiers,
-                                  &code)) {
-        LOG_DBG("No rule found for key with index %d", key_index);
+} pressed_key_t;
+
+#define PRESSED_KEYS_MAX_COUNT 10
+static pressed_key_t pressed_keys[PRESSED_KEYS_MAX_COUNT];
+static uint8_t pressed_keys_count = 0;
+
+static void add_normal_key(pressed_key_t *key) {
+    if (pressed_keys_count < PRESSED_KEYS_MAX_COUNT) {
+        pressed_keys[pressed_keys_count++] = *key;
+    }
+}
+
+static void remove_normal_key(uint8_t key_index) {
+    for (int i = 0; i < pressed_keys_count; ++i) {
+        if (pressed_keys[i].index == key_index) {
+            for (int j = i + 1; j < pressed_keys_count; ++j) {
+                pressed_keys[j - 1] = pressed_keys[j];
+            }
+            pressed_keys_count--;
+            return;
+        }
+    }
+}
+
+void on_press_default(press_ctx_t *ctx) {
+
+    uint8_t idx = ctx->index;
+    kb_key_rules_t *rules = &ctx->mappings[idx];
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+    if ((IS_ENABLED(CONFIG_BT_CONNECT_MASTER_LEFT) && ctx->is_slave) ||
+        (IS_ENABLED(CONFIG_BT_CONNECT_MASTER_RIGHT) && !ctx->is_slave)) {
+        idx += CONFIG_KB_KEY_COUNT;
+    }
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
+
+    uint8_t code;
+    if (!kb_mapping_translate_key(rules, layer_modifiers, &code)) {
+        LOG_DBG("No rule found for key with index %d", idx);
         return;
     }
 
-    LOG_DBG("Key %d HID 0x%X pressed", key_index, code);
+    LOG_DBG("Key %d HID 0x%X pressed", idx, code);
 
-    if (code < KEY_LEFTCONTROL) {
+    if (code < KEY_FN) {
         if (fn_pressed) {
-            fn_add(code);
+            fn_add(idx);
             process_fn_buff();
             return;
         } else {
-            add_normal_key(code);
+            pressed_key_t key = {
+                .index = idx,
+                .code = code,
+            };
+            add_normal_key(&key);
         }
-    } else if (code < KEY_FN) {
-        report[0] |= modifier_map[code - KEY_LEFTCONTROL];
     } else if (code == KEY_FN) {
         fn_pressed = true;
         return;
@@ -208,25 +204,32 @@ void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
     }
 }
 
-void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
-                        kb_settings_t *settings) {
+void on_release_default(press_ctx_t *ctx) {
+
+    uint8_t idx = ctx->index;
+    kb_key_rules_t *rules = &ctx->mappings[idx];
+
+#if CONFIG_BT_INTER_KB_COMM_MASTER
+    if ((IS_ENABLED(CONFIG_BT_CONNECT_MASTER_LEFT) && ctx->is_slave) ||
+        (IS_ENABLED(CONFIG_BT_CONNECT_MASTER_RIGHT) && !ctx->is_slave)) {
+        idx += CONFIG_KB_KEY_COUNT;
+    }
+#endif // CONFIG_BT_INTER_KB_COMM_MASTER
+
     uint8_t code;
-    if (!kb_mapping_translate_key(&mappings[key_index], layer_modifiers,
-                                  &code)) {
-        LOG_DBG("No rule found for key with index %d", key_index);
+    if (!kb_mapping_translate_key(rules, layer_modifiers, &code)) {
+        LOG_DBG("No rule found for key with index %d", idx);
         return;
     }
 
-    LOG_DBG("Key %d HID 0x%X released", key_index, code);
+    LOG_DBG("Key %d HID 0x%X released", idx, code);
 
-    if (code < KEY_LEFTCONTROL) {
+    if (code < KEY_FN) {
         if (fn_pressed) {
-            fn_remove(code);
+            fn_remove(idx);
         } else {
-            remove_normal_key(code);
+            remove_normal_key(idx);
         }
-    } else if (code < KEY_FN) {
-        report[0] &= ~(modifier_map[code - KEY_LEFTCONTROL]);
     } else if (code == KEY_FN) {
         fn_pressed = false;
         fn_buff_size = 0;
@@ -250,7 +253,26 @@ void handle_bl_on_event(uint8_t key_index, kb_settings_t *settings,
 #endif // CONFIG_KB_BACKLIGHT
 }
 
+static uint8_t modifier_map[8] = {0x01, 0x02, 0x04, 0x08,
+                                  0x10, 0x20, 0x40, 0x80};
+
 void handle_hid_report() {
+
+    uint8_t report[8] = {0};
+    uint8_t report_size = 0;
+
+    for (uint8_t i = 0; i < pressed_keys_count; ++i) {
+        pressed_key_t key = pressed_keys[i];
+        if (key.code >= KEY_LEFTCONTROL) {
+            report[0] |= modifier_map[key.code - KEY_LEFTCONTROL];
+            continue;
+        }
+        report[report_size + 2] = key.code;
+        report_size++;
+        if (report_size == 6) {
+            break;
+        }
+    }
 
 #if CONFIG_KB_HANDLE_REPORT_PRIO_USB
     if (usb_connect_is_ready()) {

@@ -7,6 +7,7 @@
 
 typedef struct {
     uint8_t index; // index of the key in the mapping table
+    uint8_t code;
     uint8_t value; // percentage pressed
     bool pressed;
 } kb_key_t;

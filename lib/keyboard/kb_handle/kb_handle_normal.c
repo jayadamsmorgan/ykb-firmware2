@@ -27,20 +27,36 @@ static uint32_t prev_down[KB_BITMAP_WORDS] = {0};
 // We store current values here, we might need them somewhere else later
 static uint16_t values[CONFIG_KB_KEY_COUNT] = {0};
 
+static bool change = false;
+
 // Runs on every key just pressed once
 static void on_press(uint8_t key_index, kb_settings_t *settings) {
     // Handle backlight 'on_event' if present
     handle_bl_on_event(key_index, settings, true, values);
 
     // Handle fn keystrokes and layer switches
-    on_press_default(settings->mappings, key_index, settings);
+    press_ctx_t ctx = {
+        .index = key_index,
+        .settings = settings,
+        .mappings = settings->mappings,
+    };
+    on_press_default(&ctx);
+
+    change = true;
 }
 
 // Runs on every key just release once
 static void on_release(uint8_t key_index, kb_settings_t *settings) {
     // Same logic as in on_press above
     handle_bl_on_event(key_index, settings, false, values);
-    on_release_default(settings->mappings, key_index, settings);
+    press_ctx_t ctx = {
+        .index = key_index,
+        .settings = settings,
+        .mappings = settings->mappings,
+    };
+    on_release_default(&ctx);
+
+    change = true;
 }
 
 void kb_handle() {
@@ -58,9 +74,9 @@ void kb_handle() {
     // Clear HID report buffer from the previous iteration
     clear_hid_report();
 
-    // Fill out HID report with the keys
-    build_hid_report_from_bitmap(settings->mappings, settings, curr_down);
-
     // Send HID report if possible BT/USB
-    handle_hid_report();
+    if (change) {
+        handle_hid_report();
+        change = false;
+    }
 }

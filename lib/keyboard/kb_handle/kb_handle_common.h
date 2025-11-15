@@ -33,20 +33,25 @@ void edge_detection(kb_settings_t *settings, uint32_t *prev_down,
                     key_state_changed_cb on_press,
                     key_state_changed_cb on_release);
 
+typedef struct {
+    kb_key_rules_t *mappings;
+    kb_settings_t *settings;
+    uint8_t index;
+    bool is_slave;
+} press_ctx_t;
+
 // Default behaviour for on_press:
 //  - handle fn keystrokes
 //  - handle layer switches
 //
 // Should be called from on_press passed to 'edge_detection' if needed
-void on_press_default(kb_key_rules_t *mappings, uint16_t key_index,
-                      kb_settings_t *settings);
+void on_press_default(press_ctx_t *ctx);
 
 // Default behaviour for on_release:
 //  - handle fn keystrokes
 //  - handle layer switches
 //
 // Should be called from on_release passed to 'edge_detection' if needed
-void on_release_default(kb_key_rules_t *mappings, uint16_t key_index,
-                        kb_settings_t *settings);
+void on_release_default(press_ctx_t *ctx);
 
 #endif // KB_HANDLE_COMMON_H_

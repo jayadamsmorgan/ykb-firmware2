@@ -6,8 +6,9 @@
 // Bluetooth
 //
 
-KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_fr_left, bt_connect_factory_reset, KEY_A);
-KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_sta_left, bt_connect_start_advertising, KEY_S);
+KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_fr_left, bt_connect_factory_reset, 17); // A
+KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_sta_left, bt_connect_start_advertising,
+                              14); // S
 KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_fr_right, bt_connect_factory_reset, KEY_H);
 KB_FN_KEYSTROKE_DEFINE_LIB_BT(bt_sta_right, bt_connect_start_advertising,
                               KEY_J);

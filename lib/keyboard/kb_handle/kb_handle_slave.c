@@ -26,7 +26,7 @@ static uint32_t curr_down[KB_BITMAP_WORDS] = {0};
 // Bitmap to store pressed keys on last kb_handle invocation
 static uint32_t prev_down[KB_BITMAP_WORDS] = {0};
 
-bool change = false;
+static bool change = false;
 
 // Runs on every key just pressed once
 static void on_press_slave(uint8_t key_index, kb_settings_t *settings) {
@@ -40,7 +40,12 @@ static void on_press_slave(uint8_t key_index, kb_settings_t *settings) {
         // If we are not connected to the master
         // we can also check for keystrokes
         // to be able to do something, idk...
-        on_press_default(settings->mappings, key_index, settings);
+        press_ctx_t ctx = {
+            .mappings = settings->mappings,
+            .settings = settings,
+            .index = key_index,
+        };
+        on_press_default(&ctx);
     }
 }
 
@@ -52,7 +57,12 @@ static void on_release_slave(uint8_t key_index, kb_settings_t *settings) {
     // Same logic as in on_press_slave above
     handle_bl_on_event(key_index, settings, false, values);
     if (!bt_connect_is_ready()) {
-        on_release_default(settings->mappings, key_index, settings);
+        press_ctx_t ctx = {
+            .mappings = settings->mappings,
+            .settings = settings,
+            .index = key_index,
+        };
+        on_release_default(&ctx);
     }
 }
 
